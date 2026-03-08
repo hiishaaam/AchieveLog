@@ -36,9 +36,10 @@ export default function WeeklyView({ sessions, weekStart, weekEnd }: WeeklyViewP
     days.forEach(d => dailyMap.set(d, { name: d, minutes: 0, confidence: 0, count: 0 }));
     
     sessions.forEach(s => {
-      const date = parseISO(s.date);
+      const [year, month, day] = s.date.split('-');
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
       // getDay returns 0 for Sunday, 1 for Monday. We want 0 for Mon, 6 for Sun
-      let dayIndex = getDay(date) - 1;
+      let dayIndex = date.getDay() - 1;
       if (dayIndex === -1) dayIndex = 6;
       
       const dayName = days[dayIndex];

@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieC
 import { Users, Calendar, PieChart as PieChartIcon, Flame, Trophy } from 'lucide-react';
 
 export default function Compare() {
-  const { user, companionId, companionProfile } = useStore();
+  const { user, companionId, companionProfile, todaySummary, companionTodaySummary } = useStore();
   const [activeTab, setActiveTab] = useState<'week' | 'subjects' | 'streaks'>('week');
   const [loading, setLoading] = useState(true);
   
@@ -30,8 +30,8 @@ export default function Compare() {
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-      const startStr = startOfWeek.toISOString().split('T')[0];
-      const endStr = endOfWeek.toISOString().split('T')[0];
+      const startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
+      const endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
 
       // Fetch Weekly Data
       const [myWeekly, friendWeekly] = await Promise.all([
@@ -44,7 +44,7 @@ export default function Compare() {
       const processedWeekly = days.map((day, index) => {
         const date = new Date(startOfWeek);
         date.setDate(startOfWeek.getDate() + index);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
         const mySessions = myWeekly.sessions.filter((s: any) => s.date === dateStr);
         const friendSessions = friendWeekly.sessions?.filter((s: any) => s.date === dateStr) || [];
@@ -116,13 +116,14 @@ export default function Compare() {
       });
 
       // Fetch Streak Data (Heatmap)
-      const end30 = new Date();
-      const start30 = new Date();
-      start30.setDate(end30.getDate() - 30);
+      const todayDate = new Date();
+      const end30 = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+      todayDate.setDate(todayDate.getDate() - 30);
+      const start30 = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
       
       const [myHistory, friendHistory] = await Promise.all([
-          apiCall(`/api/history?startDate=${start30.toISOString().split('T')[0]}&endDate=${end30.toISOString().split('T')[0]}&limit=100`),
-          apiCall(`/api/users/${companionId}/history?startDate=${start30.toISOString().split('T')[0]}&endDate=${end30.toISOString().split('T')[0]}&limit=100`).catch(() => ({ sessions: [] }))
+          apiCall(`/api/history?startDate=${start30}&endDate=${end30}&limit=100`),
+          apiCall(`/api/users/${companionId}/history?startDate=${start30}&endDate=${end30}&limit=100`).catch(() => ({ sessions: [] }))
       ]);
 
       const processHeatmap = (sessions: any[]) => {
@@ -130,7 +131,8 @@ export default function Compare() {
           for(let i=0; i<30; i++) {
               const d = new Date();
               d.setDate(d.getDate() - i);
-              map[d.toISOString().split('T')[0]] = 0;
+              const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              map[dateStr] = 0;
           }
           
           sessions.forEach(s => {
@@ -451,9 +453,9 @@ export default function Compare() {
               <div>
                 <div className="text-sm text-zinc-400 mb-1">Current Streak</div>
                 <div className="flex items-center gap-4 text-xl font-bold text-white">
-                  <span className="flex items-center gap-1"><Flame className="w-5 h-5 text-orange-500" /> You: 5 days</span>
+                  <span className="flex items-center gap-1"><Flame className="w-5 h-5 text-orange-500" /> You: {todaySummary?.streak || 0} days</span>
                   <span className="w-px h-6 bg-zinc-700" />
-                  <span className="flex items-center gap-1"><Flame className="w-5 h-5 text-zinc-600" /> {companionProfile?.display_name || 'Friend'}: 3 days</span>
+                  <span className="flex items-center gap-1"><Flame className="w-5 h-5 text-zinc-600" /> {companionProfile?.display_name || 'Friend'}: {companionTodaySummary?.streak || 0} days</span>
                 </div>
               </div>
               <div>

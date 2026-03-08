@@ -11,6 +11,7 @@ export async function apiCall(
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'x-timezone-offset': new Date().getTimezoneOffset().toString()
   };
 
   if (token) {

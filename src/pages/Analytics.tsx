@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, addMonths, subMonths } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { Button } from '@/components/ui/Button';
 import WeeklyView from '@/components/analytics/WeeklyView';
 import MonthlyView from '@/components/analytics/MonthlyView';
 import AllTimeView from '@/components/analytics/AllTimeView';
 import { useStore } from '@/store/useStore';
-import { supabase } from '@/lib/supabase';
+import { apiCall } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 type Tab = 'weekly' | 'monthly' | 'all-time';
@@ -18,49 +18,75 @@ export default function Analytics() {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useStore();
+  const hasAutoNavigated = useRef(false);
 
   const fetchData = async () => {
     if (!user) return;
     setIsLoading(true);
     try {
-      let dateFrom: string | undefined;
-      let dateTo: string | undefined;
+      let resultData;
 
       if (activeTab === 'weekly') {
-        dateFrom = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        dateTo = format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const dateFrom = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const dateTo = format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        const res = await apiCall(`/api/analytics/weekly?startDate=${dateFrom}&endDate=${dateTo}`);
+        resultData = { sessions: res.sessions };
+
+        // If current week is empty and we haven't auto-navigated yet, try previous week
+        if (res.sessions.length === 0 && !hasAutoNavigated.current) {
+          hasAutoNavigated.current = true;
+          const prevDate = subWeeks(currentDate, 1);
+          const prevFrom = format(startOfWeek(prevDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+          const prevTo = format(endOfWeek(prevDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+          const prevRes = await apiCall(`/api/analytics/weekly?startDate=${prevFrom}&endDate=${prevTo}`);
+          if (prevRes.sessions.length > 0) {
+            setCurrentDate(prevDate);
+            setIsLoading(false);
+            return; // The useEffect will re-trigger with the new date
+          }
+        }
       } else if (activeTab === 'monthly') {
-        dateFrom = format(startOfMonth(currentDate), 'yyyy-MM-dd');
-        const nextMonth = addMonths(currentDate, 1);
-        dateTo = format(startOfMonth(nextMonth), 'yyyy-MM-dd');
+        const year = format(currentDate, 'yyyy');
+        const month = format(currentDate, 'MM');
+        const res = await apiCall(`/api/analytics/monthly?year=${year}&month=${month}`);
+        resultData = { sessions: res.sessions };
+
+        // If current month is empty and we haven't auto-navigated yet, try previous month
+        if (res.sessions.length === 0 && !hasAutoNavigated.current) {
+          hasAutoNavigated.current = true;
+          const prevDate = subMonths(currentDate, 1);
+          const prevYear = format(prevDate, 'yyyy');
+          const prevMonth = format(prevDate, 'MM');
+          const prevRes = await apiCall(`/api/analytics/monthly?year=${prevYear}&month=${prevMonth}`);
+          if (prevRes.sessions.length > 0) {
+            setCurrentDate(prevDate);
+            setIsLoading(false);
+            return;
+          }
+        }
+      } else {
+        // all-time
+        const res = await apiCall(`/api/analytics/all-time`);
+        resultData = { 
+          sessions: res.sessions,
+          total_minutes: res.totalMinutes,
+          total_sessions: res.totalSessions,
+          completed_chapters: res.completedChapters || 0
+        };
       }
 
-      let query = supabase
-        .from('study_sessions')
-        .select('*, subjects(name, color), chapters(name)')
-        .eq('user_id', user.id)
-        .order('date', { ascending: true });
-
-      if (dateFrom) query = query.gte('date', dateFrom);
-      if (dateTo) query = query.lte('date', dateTo);
-
-      const { data: sessions, error } = await query;
-      if (error) throw error;
-
-      const mappedSessions = (sessions || []).map((s: any) => ({
-        ...s,
-        subject_name: s.subjects?.name,
-        subject_color: s.subjects?.color,
-        chapter: s.chapters?.name,
-      }));
-
-      setData({ sessions: mappedSessions });
+      setData(resultData);
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Reset auto-navigate flag when user manually changes tab
+  useEffect(() => {
+    hasAutoNavigated.current = false;
+  }, [activeTab]);
 
   useEffect(() => {
     fetchData();

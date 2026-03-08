@@ -48,7 +48,8 @@ export default function MonthlyView({ sessions, year, month }: MonthlyViewProps)
     // Weekly Breakdown
     const weeklyMap = new Map();
     sessions.forEach(s => {
-      const date = parseISO(s.date);
+      const [y, m, d] = s.date.split('-');
+      const date = new Date(Number(y), Number(m) - 1, Number(d));
       const weekNum = getWeek(date);
       if (!weeklyMap.has(weekNum)) {
         weeklyMap.set(weekNum, { week: `Week ${weekNum}`, minutes: 0 });
@@ -137,7 +138,7 @@ export default function MonthlyView({ sessions, year, month }: MonthlyViewProps)
             <div key={d} className="text-center text-xs text-slate-500 mb-1">{d}</div>
           ))}
           {/* Offset for first day of month */}
-          {Array.from({ length: (getDay(parseISO(stats.heatmapData[0]?.date || '2024-01-01')) + 6) % 7 }).map((_, i) => (
+          {Array.from({ length: (getDay(new Date(year, month - 1, 1)) + 6) % 7 }).map((_, i) => (
             <div key={`empty-${i}`} />
           ))}
           {stats.heatmapData.map((day) => (

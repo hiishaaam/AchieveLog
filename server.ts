@@ -302,19 +302,20 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/subjects', authenticateToken, async (req: any, res) => {
   const { data: subjects, error } = await supabase
     .from('subjects')
-    .select('*, chapters(count), study_sessions(duration_minutes)')
+    .select('*, chapters(status), study_sessions(duration_minutes)')
     .eq('user_id', req.user.id);
 
   if (error) return res.status(500).json({ message: error.message });
 
   const result = subjects.map((sub: any) => {
     const totalMinutes = sub.study_sessions?.reduce((acc: number, s: any) => acc + s.duration_minutes, 0) || 0;
+    const completedChapters = sub.chapters?.filter((c: any) => c.status === 'completed').length || 0;
 
     return {
       ...sub,
       total_study_minutes: totalMinutes,
       total_chapters: sub.total_chapters,
-      completed_chapters: sub.completed_chapters
+      completed_chapters: completedChapters
     };
   });
 
@@ -454,9 +455,14 @@ function getToday(req: any): string {
   const tzOffset = req.query.tz || req.headers['x-timezone-offset'];
   if (tzOffset) {
     const now = new Date();
+    // getTimezoneOffset() is in minutes (UTC - Local). So we subtract it from local to get UTC.
+    // Wait, the client generates its timezone offset using `new Date().getTimezoneOffset()`.
+    // In JS, IST (+05:30) returns -330.
+    // If we want to simulate the client's local time, we should take UTC, and SUBTRACT tzOffset in minutes.
+    // e.g. UTC (20:00) - (-330) = UTC + 330 mins = 01:30 local
     const offsetMs = parseInt(tzOffset) * 60 * 1000;
-    const local = new Date(now.getTime() + offsetMs);
-    return local.toISOString().split('T')[0];
+    const localTime = new Date(now.getTime() - offsetMs);
+    return localTime.toISOString().split('T')[0];
   }
   return new Date().toISOString().split('T')[0];
 }
@@ -535,13 +541,15 @@ app.post('/api/sessions', authenticateToken, async (req: any, res) => {
   if (finalChapterId && isNaN(Number(finalChapterId))) finalChapterId = null;
   if (!finalChapterId && !isNaN(Number(chapter_id))) finalChapterId = Number(chapter_id);
 
+  const localDate = date || getToday(req);
+
   const { data, error } = await supabase
     .from('study_sessions')
     .insert({
       user_id: req.user.id,
       subject_id: subject_id || null,
       chapter_id: finalChapterId || null,
-      date, start_time, end_time, duration_minutes,
+      date: localDate, start_time, end_time, duration_minutes,
       topics: topics || [],
       confidence_rating, mood,
       notes: notes || null
@@ -840,6 +848,12 @@ app.get('/api/analytics/all-time', authenticateToken, async (req: any, res) => {
 
   const streak = await getUserStreak(req.user.id);
 
+  const { count: completedChapters } = await supabase
+    .from('chapters')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', req.user.id)
+    .eq('status', 'completed');
+
   res.json({
     totalMinutes,
     totalSessions,
@@ -849,6 +863,7 @@ app.get('/api/analytics/all-time', authenticateToken, async (req: any, res) => {
     subjectBreakdown,
     moodBreakdown: moodMap,
     streak,
+    completedChapters: completedChapters || 0,
     sessions: sessions.map((s: any) => ({
       ...s,
       subject_name: s.subjects?.name,
@@ -984,18 +999,19 @@ app.get('/api/users/:id/subjects', authenticateToken, async (req: any, res) => {
 
   const { data: subjects, error } = await supabase
     .from('subjects')
-    .select('*, chapters(count), study_sessions(duration_minutes)')
+    .select('*, chapters(status), study_sessions(duration_minutes)')
     .eq('user_id', companionId);
 
   if (error) return res.status(500).json({ message: error.message });
 
   const result = subjects.map((sub: any) => {
     const totalMinutes = sub.study_sessions?.reduce((acc: number, s: any) => acc + s.duration_minutes, 0) || 0;
+    const completedChapters = sub.chapters?.filter((c: any) => c.status === 'completed').length || 0;
     return {
       ...sub,
       total_study_minutes: totalMinutes,
       total_chapters: sub.total_chapters,
-      completed_chapters: sub.completed_chapters
+      completed_chapters: completedChapters
     };
   });
 
