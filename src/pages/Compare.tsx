@@ -25,19 +25,36 @@ export default function Compare() {
 
     try {
       const today = new Date();
-      const startOfWeek = new Date(today);
+      let startOfWeek = new Date(today);
       startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday
-      const endOfWeek = new Date(startOfWeek);
+      let endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-      const startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
-      const endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
+      let startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
+      let endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
 
       // Fetch Weekly Data
-      const [myWeekly, friendWeekly] = await Promise.all([
+      let [myWeekly, friendWeekly] = await Promise.all([
         apiCall(`/api/analytics/weekly?startDate=${startStr}&endDate=${endStr}`),
         apiCall(`/api/users/${companionId}/analytics/weekly?startDate=${startStr}&endDate=${endStr}`).catch(() => ({ sessions: [] }))
       ]);
+
+      // If current week is empty for both users, fallback to previous week
+      if (myWeekly.sessions.length === 0 && (friendWeekly.sessions?.length || 0) === 0) {
+        startOfWeek.setDate(startOfWeek.getDate() - 7);
+        endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
+        endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
+        const [prevMy, prevFriend] = await Promise.all([
+          apiCall(`/api/analytics/weekly?startDate=${startStr}&endDate=${endStr}`),
+          apiCall(`/api/users/${companionId}/analytics/weekly?startDate=${startStr}&endDate=${endStr}`).catch(() => ({ sessions: [] }))
+        ]);
+        if (prevMy.sessions.length > 0 || (prevFriend.sessions?.length || 0) > 0) {
+          myWeekly = prevMy;
+          friendWeekly = prevFriend;
+        }
+      }
 
       // Process Weekly Data for Bar Chart
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
