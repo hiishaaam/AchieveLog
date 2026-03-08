@@ -992,7 +992,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Serve static files in production
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
       app.get('*', (req, res) => {
