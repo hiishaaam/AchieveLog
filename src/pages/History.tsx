@@ -6,6 +6,7 @@ import SessionsTable from '@/components/history/SessionsTable';
 import EmptyState from '@/components/ui/EmptyState';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useStore } from '@/store/useStore';
+import { apiCall } from '@/lib/api';
 import { useToast } from '@/store/useToast';
 
 export default function History() {
@@ -31,14 +32,9 @@ export default function History() {
     });
 
     try {
-      const res = await fetch(`/api/history?${queryParams}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSessions(data.sessions);
-        setTotal(data.total);
-      }
+      const data = await apiCall(`/api/history?${queryParams}`);
+      setSessions(data.sessions);
+      setTotal(data.total);
     } catch (err) {
       console.error(err);
     } finally {
@@ -52,20 +48,10 @@ export default function History() {
 
   const handleBulkDelete = async () => {
     try {
-      const res = await fetch('/api/sessions/bulk-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ ids: selectedIds })
-      });
-
-      if (res.ok) {
-        addToast(`Deleted ${selectedIds.length} sessions`, 'success');
-        setSelectedIds([]);
-        fetchSessions();
-      }
+      await apiCall('/api/sessions/bulk-delete', 'POST', { ids: selectedIds });
+      addToast(`Deleted ${selectedIds.length} sessions`, 'success');
+      setSelectedIds([]);
+      fetchSessions();
     } catch (err) {
       console.error(err);
       addToast('Failed to delete sessions', 'error');

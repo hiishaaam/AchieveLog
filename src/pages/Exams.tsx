@@ -6,6 +6,7 @@ import AddExamModal from '@/components/exams/AddExamModal';
 import PreparationInsights from '@/components/exams/PreparationInsights';
 import EmptyState from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
+import { apiCall } from '@/lib/api';
 
 export default function Exams() {
   const [exams, setExams] = useState<any[]>([]);
@@ -16,13 +17,8 @@ export default function Exams() {
   const fetchExams = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/exams', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setExams(data);
-      }
+      const data = await apiCall('/api/exams');
+      setExams(data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -34,13 +30,8 @@ export default function Exams() {
   const fetchSubjects = async () => {
     if (!token || subjects.length > 0) return;
     try {
-      const res = await fetch('/api/subjects', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubjects(data);
-      }
+      const data = await apiCall('/api/subjects');
+      setSubjects(data);
     } catch (err) {
       console.error(err);
     }

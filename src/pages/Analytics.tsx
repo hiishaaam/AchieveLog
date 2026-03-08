@@ -7,6 +7,7 @@ import WeeklyView from '@/components/analytics/WeeklyView';
 import MonthlyView from '@/components/analytics/MonthlyView';
 import AllTimeView from '@/components/analytics/AllTimeView';
 import { useStore } from '@/store/useStore';
+import { apiCall } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 type Tab = 'weekly' | 'monthly' | 'all-time';
@@ -35,14 +36,8 @@ export default function Analytics() {
         url = '/api/analytics/all-time';
       }
 
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const result = await res.json();
-        setData(result);
-      }
+      const result = await apiCall(url);
+      setData(result);
     } catch (err) {
       console.error(err);
     } finally {

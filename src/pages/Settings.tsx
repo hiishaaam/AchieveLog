@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useStore } from '@/store/useStore';
+import { apiCall } from '@/lib/api';
 import { useToast } from '@/store/useToast';
 import { COLOR_PALETTE } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -25,8 +26,7 @@ export default function Settings() {
 
   useEffect(() => {
     if (token) {
-      fetch('/api/settings', { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => res.json())
+      apiCall('/api/settings')
         .then(data => {
           if (data) setSettings(data);
         })
@@ -37,23 +37,11 @@ export default function Settings() {
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(settings)
-      });
-
-      if (res.ok) {
-        addToast('Settings saved successfully', 'success');
-      } else {
-        addToast('Failed to save settings', 'error');
-      }
+      await apiCall('/api/settings', 'PUT', settings);
+      addToast('Settings saved successfully', 'success');
     } catch (err) {
       console.error(err);
-      addToast('Error saving settings', 'error');
+      addToast('Failed to save settings', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -61,14 +49,9 @@ export default function Settings() {
 
   const handleClearData = async () => {
     try {
-      const res = await fetch('/api/data/clear', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        addToast('All data cleared', 'success');
-        window.location.reload();
-      }
+      await apiCall('/api/data/clear', 'POST');
+      addToast('All data cleared', 'success');
+      window.location.reload();
     } catch (err) {
       console.error(err);
       addToast('Failed to clear data', 'error');

@@ -25,7 +25,9 @@ export default function Login() {
       // which might cause a loop or weird behavior if we are already on login.
       // But actually apiCall is fine, except we don't have a token yet.
       
-      const response = await fetch(endpoint, {
+      const BASE_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL ?? '');
+      
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, pin })
@@ -41,7 +43,7 @@ export default function Login() {
 
       // Fetch companion
       try {
-        const allUsersResponse = await fetch('/api/users/all', {
+        const allUsersResponse = await fetch(`${BASE_URL}/api/users/all`, {
           headers: { 'Authorization': `Bearer ${data.token}` }
         });
         if (allUsersResponse.ok) {

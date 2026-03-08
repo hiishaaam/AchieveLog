@@ -347,7 +347,7 @@ export default function Dashboard() {
             accentColor="#4F8EF7"
             summary={todaySummary}
             sessions={todaySessions}
-            streak={todaySummary?.productivityScore ? 5 : 0} // Mock streak for now or fetch real one
+            streak={todaySummary?.streak || 0}
           />
         </div>
 
@@ -360,7 +360,7 @@ export default function Dashboard() {
                summary={companionTodaySummary}
                sessions={companionTodaySessions}
                isReadOnly={true}
-               streak={3} // Mock streak
+               streak={companionTodaySummary?.streak || 0}
              />
            ) : (
              <div className="h-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">

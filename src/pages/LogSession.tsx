@@ -169,14 +169,14 @@ export default function LogSession() {
 
     setIsSubmitting(true);
 
-    const chapterName = formData.chapterId === 'custom' 
-      ? formData.customChapter 
-      : chapters.find(c => c.id === Number(formData.chapterId))?.name || formData.customChapter;
+    const resolvedChapterId = formData.chapterId && formData.chapterId !== 'custom' 
+      ? Number(formData.chapterId) 
+      : null;
 
     const payload = {
       date: formData.date,
       subject_id: Number(formData.subjectId),
-      chapter: chapterName,
+      chapter_id: resolvedChapterId,
       topics: formData.topics,
       start_time: formData.startTime,
       end_time: formData.endTime,

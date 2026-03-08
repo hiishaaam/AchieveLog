@@ -403,8 +403,20 @@ app.get('/api/sessions', authenticateToken, async (req: any, res) => {
   res.json(result);
 });
 
+// Helper to get today's date, accepting optional timezone offset
+function getToday(req: any): string {
+  const tzOffset = req.query.tz || req.headers['x-timezone-offset'];
+  if (tzOffset) {
+    const now = new Date();
+    const offsetMs = parseInt(tzOffset) * 60 * 1000;
+    const local = new Date(now.getTime() + offsetMs);
+    return local.toISOString().split('T')[0];
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
 app.get('/api/sessions/today', authenticateToken, async (req: any, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday(req);
   const { data, error } = await supabase
     .from('study_sessions')
     .select('*, subjects(name, color), chapters(name)')
@@ -425,7 +437,7 @@ app.get('/api/sessions/today', authenticateToken, async (req: any, res) => {
 });
 
 app.get('/api/sessions/today/summary', authenticateToken, async (req: any, res) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday(req);
 
   const { data: sessions, error } = await supabase
     .from('study_sessions')
@@ -462,7 +474,7 @@ app.get('/api/sessions/today/summary', authenticateToken, async (req: any, res) 
 });
 
 app.post('/api/sessions', authenticateToken, async (req: any, res) => {
-  const { date, subject_id, chapter_id, topics,
+  const { date, subject_id, chapter_id, chapter, topics,
           start_time, end_time, confidence_rating, mood, notes } = req.body;
 
   const [sh, sm] = start_time.split(':').map(Number);
@@ -471,8 +483,10 @@ app.post('/api/sessions', authenticateToken, async (req: any, res) => {
   if (duration_minutes <= 0)
     return res.status(400).json({ message: 'End time must be after start time' });
 
+  // Accept chapter_id as number, or chapter as string name
   let finalChapterId = chapter_id;
-  if (isNaN(Number(chapter_id))) finalChapterId = null;
+  if (finalChapterId && isNaN(Number(finalChapterId))) finalChapterId = null;
+  if (!finalChapterId && !isNaN(Number(chapter_id))) finalChapterId = Number(chapter_id);
 
   const { data, error } = await supabase
     .from('study_sessions')
@@ -493,16 +507,19 @@ app.post('/api/sessions', authenticateToken, async (req: any, res) => {
 });
 
 app.put('/api/sessions/:id', authenticateToken, async (req: any, res) => {
-  const { start_time, end_time, ...rest } = req.body;
+  const { start_time, end_time, chapter_id, chapter, ...rest } = req.body;
   const [sh, sm] = start_time.split(':').map(Number);
   const [eh, em] = end_time.split(':').map(Number);
   const duration_minutes = (eh * 60 + em) - (sh * 60 + sm);
   if (duration_minutes <= 0)
     return res.status(400).json({ message: 'End time must be after start time' });
 
+  let finalChapterId = chapter_id;
+  if (finalChapterId && isNaN(Number(finalChapterId))) finalChapterId = null;
+
   const { data, error } = await supabase
     .from('study_sessions')
-    .update({ ...rest, start_time, end_time, duration_minutes })
+    .update({ ...rest, start_time, end_time, duration_minutes, chapter_id: finalChapterId || null })
     .eq('id', req.params.id)
     .eq('user_id', req.user.id)
     .select()
@@ -670,7 +687,127 @@ app.post('/api/data/clear', authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
-// Analytics Routes (Simplified)
+// =====================
+// Analytics Routes
+// =====================
+
+// GET /api/analytics/weekly — returns sessions for a date range
+app.get('/api/analytics/weekly', authenticateToken, async (req: any, res) => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate are required' });
+
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .eq('user_id', req.user.id)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const sessions = data.map((s: any) => ({
+    ...s,
+    subject_name: s.subjects?.name,
+    subject_color: s.subjects?.color,
+    chapter: s.chapters?.name
+  }));
+
+  res.json({ sessions });
+});
+
+// GET /api/analytics/monthly — returns sessions for a given month
+app.get('/api/analytics/monthly', authenticateToken, async (req: any, res) => {
+  const { year, month } = req.query;
+  if (!year || !month) return res.status(400).json({ message: 'year and month are required' });
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(Number(year), Number(month), 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .eq('user_id', req.user.id)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const sessions = data.map((s: any) => ({
+    ...s,
+    subject_name: s.subjects?.name,
+    subject_color: s.subjects?.color,
+    chapter: s.chapters?.name
+  }));
+
+  res.json({ sessions });
+});
+
+// GET /api/analytics/all-time — returns aggregated stats
+app.get('/api/analytics/all-time', authenticateToken, async (req: any, res) => {
+  const { data: sessions, error } = await supabase
+    .from('study_sessions')
+    .select('duration_minutes, date, confidence_rating, mood, subjects(name, color)')
+    .eq('user_id', req.user.id)
+    .order('date', { ascending: true });
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const totalMinutes = sessions.reduce((acc: number, s: any) => acc + s.duration_minutes, 0);
+  const totalSessions = sessions.length;
+  const avgConfidence = totalSessions
+    ? parseFloat((sessions.reduce((acc: number, s: any) => acc + s.confidence_rating, 0) / totalSessions).toFixed(1))
+    : 0;
+
+  // Daily breakdown
+  const dailyMap: Record<string, number> = {};
+  sessions.forEach((s: any) => {
+    dailyMap[s.date] = (dailyMap[s.date] || 0) + s.duration_minutes;
+  });
+  const daysStudied = Object.keys(dailyMap).length;
+  const avgDaily = daysStudied ? Math.round(totalMinutes / daysStudied) : 0;
+
+  // Subject breakdown
+  const subjectMap: Record<string, { minutes: number; color: string }> = {};
+  sessions.forEach((s: any) => {
+    const name = s.subjects?.name || 'Unknown';
+    if (!subjectMap[name]) subjectMap[name] = { minutes: 0, color: s.subjects?.color || '#666' };
+    subjectMap[name].minutes += s.duration_minutes;
+  });
+  const subjectBreakdown = Object.entries(subjectMap).map(([name, info]) => ({
+    name,
+    value: info.minutes,
+    color: info.color
+  }));
+
+  // Mood breakdown
+  const moodMap: Record<string, number> = {};
+  sessions.forEach((s: any) => {
+    moodMap[s.mood] = (moodMap[s.mood] || 0) + 1;
+  });
+
+  const streak = await getUserStreak(req.user.id);
+
+  res.json({
+    totalMinutes,
+    totalSessions,
+    avgConfidence,
+    daysStudied,
+    avgDailyMinutes: avgDaily,
+    subjectBreakdown,
+    moodBreakdown: moodMap,
+    streak,
+    sessions: sessions.map((s: any) => ({
+      ...s,
+      subject_name: s.subjects?.name,
+      subject_color: s.subjects?.color,
+    }))
+  });
+});
+
+// GET /api/analytics/summary
 app.get('/api/analytics/summary', authenticateToken, async (req: any, res) => {
     const { data, error } = await supabase
         .from('study_sessions')
@@ -679,13 +816,17 @@ app.get('/api/analytics/summary', authenticateToken, async (req: any, res) => {
         
     if (error) return res.status(500).json({ message: error.message });
     
-    const totalMinutes = data.reduce((acc, s) => acc + s.duration_minutes, 0);
+    const totalMinutes = data.reduce((acc: any, s: any) => acc + s.duration_minutes, 0);
     
     res.json({
         totalMinutes,
         totalSessions: data.length
     });
 });
+
+// =====================
+// Companion/User Routes
+// =====================
 
 app.get('/api/users/all', authenticateToken, async (req: any, res) => {
   const { data, error } = await supabase
@@ -696,6 +837,148 @@ app.get('/api/users/all', authenticateToken, async (req: any, res) => {
 
   if (error) return res.status(500).json({ message: error.message });
   res.json(data);
+});
+
+// GET /api/users/:id/summary/today — companion's today summary
+app.get('/api/users/:id/summary/today', authenticateToken, async (req: any, res) => {
+  const companionId = req.params.id;
+  const today = getToday(req);
+
+  const { data: sessions, error } = await supabase
+    .from('study_sessions')
+    .select('duration_minutes, confidence_rating, subjects(name)')
+    .eq('user_id', companionId)
+    .eq('date', today);
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('daily_goal_minutes')
+    .eq('id', companionId)
+    .single();
+
+  const totalMinutes = sessions?.reduce((s: number, r: any) => s + r.duration_minutes, 0) || 0;
+  const avgConfidence = sessions?.length
+    ? sessions.reduce((s: number, r: any) => s + r.confidence_rating, 0) / sessions.length
+    : 0;
+  const goalMinutes = profile?.daily_goal_minutes || 240;
+  const productivityScore = Math.min(100, Math.round(
+    (totalMinutes / goalMinutes) * 50 + (avgConfidence / 5) * 50
+  ));
+  const streak = await getUserStreak(companionId);
+
+  res.json({
+    totalMinutes,
+    sessionCount: sessions?.length || 0,
+    subjectsCovered: [...new Set(sessions?.map((s: any) => s.subjects?.name).filter(Boolean))],
+    avgConfidence: parseFloat(avgConfidence.toFixed(1)),
+    productivityScore,
+    streak
+  });
+});
+
+// GET /api/users/:id/sessions/today — companion's today sessions
+app.get('/api/users/:id/sessions/today', authenticateToken, async (req: any, res) => {
+  const companionId = req.params.id;
+  const today = getToday(req);
+
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .eq('user_id', companionId)
+    .eq('date', today)
+    .order('start_time', { ascending: false });
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const result = data.map((s: any) => ({
+    ...s,
+    subject_name: s.subjects?.name,
+    subject_color: s.subjects?.color,
+    chapter: s.chapters?.name
+  }));
+
+  res.json(result);
+});
+
+// GET /api/users/:id/analytics/weekly — companion's weekly analytics
+app.get('/api/users/:id/analytics/weekly', authenticateToken, async (req: any, res) => {
+  const companionId = req.params.id;
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) return res.status(400).json({ message: 'startDate and endDate required' });
+
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .eq('user_id', companionId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const sessions = data.map((s: any) => ({
+    ...s,
+    subject_name: s.subjects?.name,
+    subject_color: s.subjects?.color,
+    chapter: s.chapters?.name
+  }));
+
+  res.json({ sessions });
+});
+
+// GET /api/users/:id/subjects — companion's subjects
+app.get('/api/users/:id/subjects', authenticateToken, async (req: any, res) => {
+  const companionId = req.params.id;
+
+  const { data: subjects, error } = await supabase
+    .from('subjects')
+    .select('*, chapters(count), study_sessions(duration_minutes)')
+    .eq('user_id', companionId);
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const result = subjects.map((sub: any) => {
+    const totalMinutes = sub.study_sessions?.reduce((acc: number, s: any) => acc + s.duration_minutes, 0) || 0;
+    return {
+      ...sub,
+      total_study_minutes: totalMinutes,
+      total_chapters: sub.total_chapters,
+      completed_chapters: sub.completed_chapters
+    };
+  });
+
+  res.json(result);
+});
+
+// GET /api/users/:id/history — companion's history
+app.get('/api/users/:id/history', authenticateToken, async (req: any, res) => {
+  const companionId = req.params.id;
+  const { startDate, endDate, limit = 100 } = req.query;
+
+  let query = supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .eq('user_id', companionId);
+
+  if (startDate) query = query.gte('date', startDate);
+  if (endDate) query = query.lte('date', endDate);
+  
+  query = query.order('date', { ascending: false }).limit(Number(limit));
+
+  const { data, error } = await query;
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const result = data.map((s: any) => ({
+    ...s,
+    subject_name: s.subjects?.name,
+    subject_color: s.subjects?.color,
+    chapter: s.chapters?.name
+  }));
+
+  res.json({ sessions: result });
 });
 
 

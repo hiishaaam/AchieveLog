@@ -4,6 +4,7 @@ import { LayoutDashboard, PlusCircle, BookOpen, History, BarChart2, Calendar, Se
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ToastContainer from './ui/ToastContainer';
+import { useStore } from '@/store/useStore';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,6 +19,7 @@ const navItems = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user } = useStore();
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 overflow-hidden">
@@ -98,9 +100,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="mt-auto pt-4 border-t border-white/10">
             <div className="flex items-center space-x-3 p-2 rounded-xl bg-white/5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500" />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-xs uppercase">
+                {user?.display_name ? user.display_name.substring(0, 2) : 'US'}
+              </div>
               <div>
-                <p className="text-sm font-medium">Student</p>
+                <p className="text-sm font-medium">{user?.display_name || 'Student'}</p>
                 <p className="text-xs text-slate-400">Pro Plan</p>
               </div>
             </div>
