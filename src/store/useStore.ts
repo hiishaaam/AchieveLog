@@ -85,6 +85,7 @@ interface AppState {
   addSession: (session: Session) => void;
   setTodayData: (sessions: Session[], summary: any) => void;
   setCompanionData: (summary: TodaySummary, sessions: Session[]) => void;
+  setCompanionProfile: (id: string, profile: { id: string; username: string; display_name: string }) => void;
   logout: () => void;
   
   // Actions
@@ -139,6 +140,7 @@ export const useStore = create<AppState>((set, get) => ({
     companionTodaySummary: summary,
     companionTodaySessions: sessions
   }),
+  setCompanionProfile: (id, profile) => set({ companionId: id, companionProfile: profile }),
 
   logout: () => {
     localStorage.removeItem('achievelog_user');

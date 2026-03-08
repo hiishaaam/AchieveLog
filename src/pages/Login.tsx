@@ -34,10 +34,29 @@ export default function Login() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed');
+        throw new Error(data.message || data.error || 'Authentication failed');
       }
 
       setUser(data.user, data.token);
+
+      // Fetch companion
+      try {
+        const allUsersResponse = await fetch('/api/users/all', {
+          headers: { 'Authorization': `Bearer ${data.token}` }
+        });
+        if (allUsersResponse.ok) {
+          const allUsers = await allUsersResponse.json();
+          if (Array.isArray(allUsers)) {
+            const companion = allUsers.find((u: any) => u.id !== data.user.id);
+            if (companion) {
+              useStore.getState().setCompanionProfile(companion.id, companion);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch companion', err);
+      }
+
       navigate('/');
     } catch (err: any) {
       setError(err.message);
