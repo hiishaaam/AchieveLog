@@ -158,8 +158,63 @@ export async function fetchTodaySessions(userId: string) {
     ...s,
     subject_name: s.subjects?.name,
     subject_color: s.subjects?.color,
-    chapter: s.chapters?.name,
   }));
+}
+
+export async function getCompanionId(currentUserId: string) {
+  // 1. Check if the user set a companion_email in their profile settings
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('companion_email')
+    .eq('id', currentUserId)
+    .single();
+
+  if (profile?.companion_email) {
+    const friendUsername = profile.companion_email.split('@')[0];
+    const { data: friendProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', friendUsername)
+      .limit(1)
+      .single();
+
+    if (friendProfile && friendProfile.id) {
+      return friendProfile.id;
+    }
+  }
+
+  // 2. Fallback to the companions table logic
+  const { data, error } = await supabase
+    .from('companions')
+    .select('user_id, companion_id')
+    .or(`user_id.eq.${currentUserId},companion_id.eq.${currentUserId}`)
+    .limit(1)
+    .single();
+
+  if (!error && data) {
+    return data.user_id === currentUserId ? data.companion_id : data.user_id;
+  }
+  
+  return null;
+}
+
+export async function fetchCombinedSessions(currentUserId: string, companionId: string) {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('*, subjects(name, color), chapters(name)')
+    .in('user_id', [currentUserId, companionId]) // <--- Liyana's IN logic!
+    .eq('date', today)
+    .order('start_time', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  // Separate them out so your Dashboard can display them in their respective columns
+  const mySessions = data.filter(s => s.user_id === currentUserId);
+  const friendSessions = data.filter(s => s.user_id === companionId);
+
+  return { mySessions, friendSessions };
 }
 
 export async function fetchTodaySummary(userId: string) {

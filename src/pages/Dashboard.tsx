@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, Session, TodaySummary } from '../store/useStore';
-import { fetchTodaySessions, fetchTodaySummary, deleteSession, fetchSettings } from '../lib/supabaseApi';
+import { fetchTodaySessions, fetchTodaySummary, deleteSession, fetchSettings, getCompanionId, fetchCombinedSessions } from '../lib/supabaseApi';
 import { supabase } from '../lib/supabase';
 import { apiCall } from '../lib/api';
 import { Clock, BookOpen, Target, Zap, Edit2, Trash2, Calendar, Star, Smile, Frown, Meh, Plus, Eye, RefreshCw, Trophy, Zap as ZapIcon, Handshake, Book } from 'lucide-react';
@@ -28,84 +28,54 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'me' | 'companion'>('me');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  // Initial Data Fetch (User)
-  useEffect(() => {
-    if (user) {
-      const fetchData = async () => {
-        try {
-          const [summary, sessions] = await Promise.all([
-            fetchTodaySummary(user.id),
-            fetchTodaySessions(user.id)
-          ]);
-          setTodayData(sessions, summary);
-        } catch (error) {
-          console.error('Failed to fetch dashboard data', error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchData();
-    }
-  }, [user, setTodayData]);
-
-  // Resolve companion based on user profile settings
   useEffect(() => {
     if (!user) return;
 
-    const getCompanion = async () => {
+    const loadDashboardData = async () => {
       try {
-        const profile = await fetchSettings(user.id);
-        const targetEmail = profile?.companion_email;
+        setIsLoading(true);
 
-        if (targetEmail && !companionId) {
-          const data = await apiCall(`/api/companion/resolve?email=${encodeURIComponent(targetEmail)}`);
-          if (data && data.id) {
-            setCompanionProfile(data.id, { 
-              id: data.id, 
-              username: targetEmail.split('@')[0], 
-              display_name: targetEmail.split('@')[0] 
-            });
-          }
+        // 1. Get Companion (Liyana's first line)
+        const compId = await getCompanionId(user.id);
+        
+        if (compId) {
+          // 2. Fetch both sessions at once (Liyana's second line)
+          const { mySessions, friendSessions } = await fetchCombinedSessions(user.id, compId);
+          
+          // 3. Fetch summaries (you could combine these in SQL later too!)
+          const [mySummary, friendSummary] = await Promise.all([
+            fetchTodaySummary(user.id),
+            fetchTodaySummary(compId)
+          ]);
+
+          // Update your Zustand store
+          setCompanionProfile(compId, { id: compId, username: 'Friend', display_name: 'Friend' });
+          setTodayData(mySessions, mySummary);
+          setCompanionData(friendSummary, friendSessions);
+          setLastUpdated(new Date());
+        } else {
+          // If no companion, just fetch own data
+          const mySessions = await fetchTodaySessions(user.id);
+          const mySummary = await fetchTodaySummary(user.id);
+          setTodayData(mySessions, mySummary);
         }
-      } catch (err) {
-        console.error('Failed to resolve companion:', err);
+      } catch (error) {
+        console.error('Failed to load dashboard:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    getCompanion();
-  }, [user, companionId, setCompanionProfile]);
+    loadDashboardData();
 
-  // Companion Data Fetching & Real-time Subscription
-  useEffect(() => {
-    if (!companionId) return;
-    
-    const fetchCompanion = async () => {
-      try {
-        const [summary, sessions] = await Promise.all([
-          fetchTodaySummary(companionId),
-          fetchTodaySessions(companionId)
-        ]);
-        setCompanionData(summary, sessions);
-        setLastUpdated(new Date());
-      } catch (err) {
-        console.warn('Failed to fetch companion data', err);
-      }
-    };
-
-    fetchCompanion(); // Initial load
-
+    // Setup realtime subscription
     const channel = supabase
-      .channel('companion-sessions')
+      .channel('dashboard-updates')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'study_sessions',
-          filter: `user_id=eq.${companionId}`
-        },
+        { event: '*', schema: 'public', table: 'study_sessions' },
         () => {
-          fetchCompanion(); // Auto-update on any change
+          loadDashboardData(); 
         }
       )
       .subscribe();
@@ -113,7 +83,7 @@ export default function Dashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [companionId, setCompanionData]);
+  }, [user, setTodayData, setCompanionData, setCompanionProfile]);
 
   const handleDelete = async (id: number) => {
     if (!user) return;

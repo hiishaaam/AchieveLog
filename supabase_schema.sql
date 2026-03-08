@@ -71,5 +71,21 @@ alter table exam_targets enable row level security;
 create policy "Enable all access for all users" on profiles for all using (true);
 create policy "Enable all access for all users" on subjects for all using (true);
 create policy "Enable all access for all users" on chapters for all using (true);
-create policy "Enable all access for all users" on study_sessions for all using (true);
 create policy "Enable all access for all users" on exam_targets for all using (true);
+
+-- Companions table
+create table if not exists companions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  companion_id uuid references profiles(id) on delete cascade,
+  created_at timestamp default now()
+);
+
+-- Insert the friendship by looking up your emails
+insert into companions (user_id, companion_id)
+select 
+  (select id from profiles where username = 'hishamaju189' limit 1),
+  (select id from profiles where username = 'liyananaduvil' limit 1);
+
+alter table companions enable row level security;
+create policy "Enable all access for all users" on companions for all using (true);
