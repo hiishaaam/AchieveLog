@@ -429,7 +429,7 @@ export async function fetchSettings(userId: string) {
   return data;
 }
 
-export async function updateSettings(userId: string, updates: { display_name?: string; daily_goal_minutes?: number; theme?: string }) {
+export async function updateSettings(userId: string, updates: { display_name?: string; daily_goal_minutes?: number; theme?: string; companion_email?: string }) {
   const { data, error } = await supabase
     .from('profiles')
     .update(updates)

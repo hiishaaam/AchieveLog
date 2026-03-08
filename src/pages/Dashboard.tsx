@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, Session, TodaySummary } from '../store/useStore';
-import { fetchTodaySessions, fetchTodaySummary, deleteSession } from '../lib/supabaseApi';
+import { fetchTodaySessions, fetchTodaySummary, deleteSession, fetchSettings } from '../lib/supabaseApi';
 import { supabase } from '../lib/supabase';
 import { apiCall } from '../lib/api';
 import { Clock, BookOpen, Target, Zap, Edit2, Trash2, Calendar, Star, Smile, Frown, Meh, Plus, Eye, RefreshCw, Trophy, Zap as ZapIcon, Handshake, Book } from 'lucide-react';
@@ -48,32 +48,31 @@ export default function Dashboard() {
     }
   }, [user, setTodayData]);
 
-  // Auto-resolve companion based on email
+  // Resolve companion based on user profile settings
   useEffect(() => {
-    if (user && user.email && !companionId) {
-      const myEmail = user.email.toLowerCase();
-      let targetEmail = '';
-      
-      if (myEmail === 'hishamaju189@gmail.com') {
-        targetEmail = 'liyananaduvil@gmail.com';
-      } else if (myEmail === 'liyananaduvil@gmail.com') {
-        targetEmail = 'hishamaju189@gmail.com';
-      }
+    if (!user) return;
 
-      if (targetEmail) {
-        apiCall(`/api/companion/resolve?email=${encodeURIComponent(targetEmail)}`)
-          .then(data => {
-            if (data && data.id) {
-              setCompanionProfile(data.id, { 
-                id: data.id, 
-                username: targetEmail.split('@')[0], 
-                display_name: targetEmail.split('@')[0] 
-              });
-            }
-          })
-          .catch(err => console.error('Failed to resolve companion:', err));
+    const getCompanion = async () => {
+      try {
+        const profile = await fetchSettings(user.id);
+        const targetEmail = profile?.companion_email;
+
+        if (targetEmail && !companionId) {
+          const data = await apiCall(`/api/companion/resolve?email=${encodeURIComponent(targetEmail)}`);
+          if (data && data.id) {
+            setCompanionProfile(data.id, { 
+              id: data.id, 
+              username: targetEmail.split('@')[0], 
+              display_name: targetEmail.split('@')[0] 
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to resolve companion:', err);
       }
-    }
+    };
+
+    getCompanion();
   }, [user, companionId, setCompanionProfile]);
 
   // Companion Data Fetching & Real-time Subscription

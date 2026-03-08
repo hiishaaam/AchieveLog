@@ -53,11 +53,6 @@ const authenticateToken = async (req: any, res: any, next: any) => {
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
 
-  const allowedEmails = ['liyananaduvil@gmail.com', 'hishamaju189@gmail.com'];
-  if (user.email && !allowedEmails.includes(user.email.toLowerCase())) {
-    return res.status(403).json({ message: 'Unauthorized user. You do not have permission.' });
-  }
-
   req.user = user;
   next();
 };
@@ -84,6 +79,18 @@ app.get('/api/companion/resolve', async (req, res) => {
     if (companion) {
       return res.json({ id: companion.id, email: companion.email });
     } else {
+      // Fallback: Check for mock users by trying to match the email prefix to a username
+      const username = email.split('@')[0];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .eq('username', username)
+        .limit(1);
+
+      if (profiles && profiles.length > 0) {
+        return res.json({ id: profiles[0].id, email: `${profiles[0].username}@mock.local` });
+      }
+
       return res.status(404).json({ error: 'Companion not found' });
     }
   } catch (err: any) {
@@ -698,18 +705,20 @@ app.get('/api/settings', authenticateToken, async (req: any, res) => {
     display_name: data.display_name,
     daily_goal: (data.daily_goal_minutes || 240) / 60,
     theme: data.theme,
+    companion_email: data.companion_email
   });
 });
 
 app.put('/api/settings', authenticateToken, async (req: any, res) => {
-  const { display_name, daily_goal, theme } = req.body;
+  const { display_name, daily_goal, theme, companion_email } = req.body;
 
   const { error } = await supabase
     .from('profiles')
     .update({
       display_name,
       daily_goal_minutes: daily_goal * 60,
-      theme
+      theme,
+      companion_email
     })
     .eq('id', req.user.id);
 

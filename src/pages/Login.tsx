@@ -19,13 +19,6 @@ export default function Login() {
     setError(null);
     setIsLoading(true);
 
-    const allowedUsers = ['liyananaduvil@gmail.com', 'hishamaju189@gmail.com'];
-    if (!allowedUsers.includes(email.toLowerCase())) {
-      setError("Unauthorized access. You do not have permission to use this application.");
-      setIsLoading(false);
-      return;
-    }
-
     try {
       if (isRegistering) {
         const { data, error: signUpError } = await supabase.auth.signUp({

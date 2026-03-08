@@ -8,6 +8,7 @@ create table if not exists profiles (
   display_name text,
   daily_goal_minutes integer default 240,
   theme text default 'dark',
+  companion_email text,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 

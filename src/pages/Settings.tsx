@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, User, Moon, Database, AlertTriangle, Check } from 'lucide-react';
+import { Save, User, Moon, Database, AlertTriangle, Check, Link } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -17,7 +17,8 @@ export default function Settings() {
     daily_goal: 4,
     weekly_goal: 20,
     theme: 'dark',
-    accent_color: 'blue'
+    accent_color: 'blue',
+    companion_email: ''
   });
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +35,8 @@ export default function Settings() {
             daily_goal: data.daily_goal_minutes ? data.daily_goal_minutes / 60 : 4,
             weekly_goal: 20,
             theme: data.theme || 'dark',
-            accent_color: 'blue'
+            accent_color: 'blue',
+            companion_email: data.companion_email || ''
           });
         })
         .catch(console.error);
@@ -49,6 +51,7 @@ export default function Settings() {
         display_name: settings.display_name,
         daily_goal_minutes: settings.daily_goal * 60,
         theme: settings.theme,
+        companion_email: settings.companion_email
       });
       addToast('Settings saved successfully', 'success');
     } catch (err) {
@@ -145,6 +148,27 @@ export default function Settings() {
               </button>
             ))}
           </div>
+        </div>
+      </Card>
+
+      {/* Companion Section */}
+      <Card className="p-6 space-y-6">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <Link className="text-pink-400" size={24} />
+          <h2 className="text-xl font-semibold">Companion Connection</h2>
+        </div>
+        
+        <div className="max-w-md">
+          <label className="block text-sm font-medium mb-2 text-slate-300">Friend's Email</label>
+          <Input 
+            type="email"
+            value={settings.companion_email || ''} 
+            onChange={e => setSettings({...settings, companion_email: e.target.value})}
+            placeholder="Enter your friend's email address"
+          />
+          <p className="text-xs text-slate-400 mt-2">
+            Enter the email address your friend used to register. They will appear on your Dashboard and Compare page.
+          </p>
         </div>
       </Card>
 
