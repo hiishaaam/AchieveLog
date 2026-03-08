@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { ICON_MAP, COLOR_PALETTE } from '@/lib/constants';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
-import { apiCall } from '@/lib/api';
+import { createSubject } from '@/lib/supabaseApi';
 
 interface AddSubjectModalProps {
   isOpen: boolean;
@@ -19,15 +19,17 @@ export default function AddSubjectModal({ isOpen, onClose }: AddSubjectModalProp
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0].value);
   const [totalChapters, setTotalChapters] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const { addSubject, token } = useStore();
+  const [error, setError] = useState<string | null>(null);
+  const { addSubject, user } = useStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
 
     setIsLoading(true);
+    setError(null);
     try {
-      const newSubject = await apiCall('/api/subjects', 'POST', {
+      const newSubject = await createSubject(user.id, {
         name,
         icon: selectedIcon,
         color: selectedColor,
@@ -36,7 +38,7 @@ export default function AddSubjectModal({ isOpen, onClose }: AddSubjectModalProp
 
       addSubject({
         ...newSubject,
-        total_chapters: totalChapters, // Optimistic update
+        total_chapters: totalChapters,
         completed_chapters: 0,
         in_progress_chapters: 0,
         total_study_minutes: 0
@@ -44,8 +46,9 @@ export default function AddSubjectModal({ isOpen, onClose }: AddSubjectModalProp
       onClose();
       setName('');
       setTotalChapters(0);
-    } catch (error) {
-      console.error('Failed to add subject', error);
+    } catch (err: any) {
+      console.error('Failed to add subject', err);
+      setError(err.message || 'Failed to create subject');
     } finally {
       setIsLoading(false);
     }
@@ -75,6 +78,12 @@ export default function AddSubjectModal({ isOpen, onClose }: AddSubjectModalProp
                   <X size={20} />
                 </button>
               </div>
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>

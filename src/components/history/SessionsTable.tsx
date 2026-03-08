@@ -6,6 +6,8 @@ import { useToast } from '@/store/useToast';
 import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/dateUtils';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { supabase } from '@/lib/supabase';
+import { deleteSession } from '@/lib/supabaseApi';
 
 interface SessionsTableProps {
   sessions: any[];
@@ -19,40 +21,41 @@ export default function SessionsTable({ sessions, onRefresh, onSelectionChange, 
   const [editForm, setEditForm] = useState<any>({});
   const [deleteId, setDeleteId] = useState<number | null>(null);
   
-  const { token } = useStore();
+  const { user } = useStore();
   const { addToast } = useToast();
 
   const handleEdit = (session: any) => {
     setEditingId(session.id);
     setEditForm({
       ...session,
-      topics: session.topics.join(', ') // Convert array to string for input
+      topics: (session.topics || []).join(', ')
     });
   };
 
   const handleSave = async () => {
+    if (!user) return;
     try {
       const payload = {
         ...editForm,
         topics: editForm.topics.split(',').map((t: string) => t.trim()).filter(Boolean)
       };
 
-      const res = await fetch(`/api/sessions/${editingId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
+      const { error } = await supabase
+        .from('study_sessions')
+        .update({
+          date: payload.date,
+          topics: payload.topics,
+          duration_minutes: payload.duration_minutes,
+          confidence_rating: payload.confidence_rating,
+        })
+        .eq('id', editingId)
+        .eq('user_id', user.id);
 
-      if (res.ok) {
-        addToast('Session updated', 'success');
-        setEditingId(null);
-        onRefresh();
-      } else {
-        addToast('Failed to update session', 'error');
-      }
+      if (error) throw error;
+
+      addToast('Session updated', 'success');
+      setEditingId(null);
+      onRefresh();
     } catch (err) {
       console.error(err);
       addToast('Error updating session', 'error');
@@ -60,16 +63,11 @@ export default function SessionsTable({ sessions, onRefresh, onSelectionChange, 
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteId || !user) return;
     try {
-      const res = await fetch(`/api/sessions/${deleteId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        addToast('Session deleted', 'success');
-        onRefresh();
-      }
+      await deleteSession(deleteId, user.id);
+      addToast('Session deleted', 'success');
+      onRefresh();
     } catch (err) {
       console.error(err);
     }

@@ -6,6 +6,7 @@ import { ICON_MAP } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import ChapterList from './ChapterList';
 import { useStore } from '@/store/useStore';
+import { deleteSubject as deleteSubjectApi } from '@/lib/supabaseApi';
 
 interface SubjectCardProps {
   subject: {
@@ -23,21 +24,17 @@ interface SubjectCardProps {
 
 export default function SubjectCard({ subject, onRefresh }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { deleteSubject, token } = useStore();
+  const { deleteSubject, user } = useStore();
   const Icon = ICON_MAP[subject.icon] || ICON_MAP.book;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(`Delete ${subject.name} and all its data?`)) return;
+    if (!user) return;
 
     try {
-      const res = await fetch(`/api/subjects/${subject.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        deleteSubject(subject.id);
-      }
+      await deleteSubjectApi(subject.id, user.id);
+      deleteSubject(subject.id);
     } catch (err) {
       console.error(err);
     }

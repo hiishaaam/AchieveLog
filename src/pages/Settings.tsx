@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useStore } from '@/store/useStore';
-import { apiCall } from '@/lib/api';
+import { fetchSettings, updateSettings } from '@/lib/supabaseApi';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/store/useToast';
 import { COLOR_PALETTE } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -21,23 +22,34 @@ export default function Settings() {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { token, logout } = useStore();
+  const { user, logout } = useStore();
   const { addToast } = useToast();
 
   useEffect(() => {
-    if (token) {
-      apiCall('/api/settings')
+    if (user) {
+      fetchSettings(user.id)
         .then(data => {
-          if (data) setSettings(data);
+          if (data) setSettings({
+            display_name: data.display_name || '',
+            daily_goal: data.daily_goal_minutes ? data.daily_goal_minutes / 60 : 4,
+            weekly_goal: 20,
+            theme: data.theme || 'dark',
+            accent_color: 'blue'
+          });
         })
         .catch(console.error);
     }
-  }, [token]);
+  }, [user]);
 
   const handleSave = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await apiCall('/api/settings', 'PUT', settings);
+      await updateSettings(user.id, {
+        display_name: settings.display_name,
+        daily_goal_minutes: settings.daily_goal * 60,
+        theme: settings.theme,
+      });
       addToast('Settings saved successfully', 'success');
     } catch (err) {
       console.error(err);
@@ -48,8 +60,12 @@ export default function Settings() {
   };
 
   const handleClearData = async () => {
+    if (!user) return;
     try {
-      await apiCall('/api/data/clear', 'POST');
+      await supabase.from('study_sessions').delete().eq('user_id', user.id);
+      await supabase.from('chapters').delete().eq('user_id', user.id);
+      await supabase.from('subjects').delete().eq('user_id', user.id);
+      await supabase.from('exam_targets').delete().eq('user_id', user.id);
       addToast('All data cleared', 'success');
       window.location.reload();
     } catch (err) {

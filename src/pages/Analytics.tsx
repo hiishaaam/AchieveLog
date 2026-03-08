@@ -7,7 +7,7 @@ import WeeklyView from '@/components/analytics/WeeklyView';
 import MonthlyView from '@/components/analytics/MonthlyView';
 import AllTimeView from '@/components/analytics/AllTimeView';
 import { useStore } from '@/store/useStore';
-import { apiCall } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 
 type Tab = 'weekly' | 'monthly' | 'all-time';
@@ -17,27 +17,44 @@ export default function Analytics() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { token } = useStore();
+  const { user } = useStore();
 
   const fetchData = async () => {
-    if (!token) return;
+    if (!user) return;
     setIsLoading(true);
     try {
-      let url = '';
+      let dateFrom: string | undefined;
+      let dateTo: string | undefined;
+
       if (activeTab === 'weekly') {
-        const start = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        const end = format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        url = `/api/analytics/weekly?startDate=${start}&endDate=${end}`;
+        dateFrom = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        dateTo = format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
       } else if (activeTab === 'monthly') {
-        const year = format(currentDate, 'yyyy');
-        const month = format(currentDate, 'MM');
-        url = `/api/analytics/monthly?year=${year}&month=${month}`;
-      } else {
-        url = '/api/analytics/all-time';
+        dateFrom = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+        const nextMonth = addMonths(currentDate, 1);
+        dateTo = format(startOfMonth(nextMonth), 'yyyy-MM-dd');
       }
 
-      const result = await apiCall(url);
-      setData(result);
+      let query = supabase
+        .from('study_sessions')
+        .select('*, subjects(name, color), chapters(name)')
+        .eq('user_id', user.id)
+        .order('date', { ascending: true });
+
+      if (dateFrom) query = query.gte('date', dateFrom);
+      if (dateTo) query = query.lte('date', dateTo);
+
+      const { data: sessions, error } = await query;
+      if (error) throw error;
+
+      const mappedSessions = (sessions || []).map((s: any) => ({
+        ...s,
+        subject_name: s.subjects?.name,
+        subject_color: s.subjects?.color,
+        chapter: s.chapters?.name,
+      }));
+
+      setData({ sessions: mappedSessions });
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,7 +64,7 @@ export default function Analytics() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab, currentDate, token]);
+  }, [activeTab, currentDate, user]);
 
   const handlePrev = () => {
     if (activeTab === 'weekly') {

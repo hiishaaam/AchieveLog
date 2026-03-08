@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, Subject, Chapter, Session } from '../store/useStore';
-import { apiCall } from '../lib/api';
+import { fetchSubjects, fetchChapters, createSession, fetchTodaySessions, fetchTodaySummary } from '../lib/supabaseApi';
+import { supabase } from '../lib/supabase';
 import { Calendar, Clock, BookOpen, Tag, Star, Smile, Frown, Meh, Target, X, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function LogSession() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { token, subjects, setSubjects, addSession, setTodayData } = useStore();
+  const { user, subjects, setSubjects, addSession, setTodayData } = useStore();
   
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -61,18 +62,18 @@ export default function LogSession() {
 
   // Fetch subjects on mount if empty
   useEffect(() => {
-    if (subjects.length === 0 && token) {
-      apiCall('/api/subjects')
+    if (subjects.length === 0 && user) {
+      fetchSubjects(user.id)
       .then(data => setSubjects(data))
       .catch(err => console.error('Failed to fetch subjects', err));
     }
-  }, [token, subjects.length, setSubjects]);
+  }, [user, subjects.length, setSubjects]);
 
   // Fetch chapters when subject changes
   useEffect(() => {
-    if (formData.subjectId) {
+    if (formData.subjectId && user) {
       setIsLoadingChapters(true);
-      apiCall(`/api/subjects/${formData.subjectId}/chapters`)
+      fetchChapters(Number(formData.subjectId), user.id)
       .then(data => {
         setChapters(data);
         setIsLoadingChapters(false);
@@ -95,7 +96,7 @@ export default function LogSession() {
     } else {
       setChapters([]);
     }
-  }, [formData.subjectId, token, location.state]);
+  }, [formData.subjectId, user, location.state]);
 
   const handleTopicKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -187,24 +188,24 @@ export default function LogSession() {
 
     console.log("=== SUBMIT TRIGGERED ===");
     console.log("Form payload:", payload);
-    console.log("Token present:", !!token);
 
     try {
-      const url = isEditing ? `/api/sessions/${editId}` : '/api/sessions';
-      const method = isEditing ? 'PUT' : 'POST';
+      if (!user) throw new Error('Not logged in');
 
-      const data = await apiCall(url, method, payload);
-      console.log("Response body:", data);
+      if (isEditing && editId) {
+        const { error: updateError } = await supabase
+          .from('study_sessions')
+          .update(payload)
+          .eq('id', editId)
+          .eq('user_id', user.id);
+        if (updateError) throw updateError;
+      } else {
+        await createSession(user.id, { ...payload, duration_minutes: duration || 0 });
+      }
 
-      // If creating, we get the new session back. If updating, we get success: true
-      // In both cases, we should refresh the store data
-      
       // Fetch updated summary
-      const summaryData = await apiCall('/api/sessions/today/summary');
-      
-      // We need to fetch all today sessions to update the store correctly
-      const todaySessionsData = await apiCall('/api/sessions/today');
-      
+      const summaryData = await fetchTodaySummary(user.id);
+      const todaySessionsData = await fetchTodaySessions(user.id);
       setTodayData(todaySessionsData, summaryData);
 
       // Success effects

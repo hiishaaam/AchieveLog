@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, Session, TodaySummary } from '../store/useStore';
-import { apiCall } from '../lib/api';
+import { fetchTodaySessions, fetchTodaySummary, deleteSession } from '../lib/supabaseApi';
 import { supabase } from '../lib/supabase';
 import { Clock, BookOpen, Target, Zap, Edit2, Trash2, Calendar, Star, Smile, Frown, Meh, Plus, Eye, RefreshCw, Trophy, Zap as ZapIcon, Handshake, Book } from 'lucide-react';
 
@@ -28,12 +28,12 @@ export default function Dashboard() {
 
   // Initial Data Fetch (User)
   useEffect(() => {
-    if (token) {
+    if (user) {
       const fetchData = async () => {
         try {
           const [summary, sessions] = await Promise.all([
-            apiCall('/api/sessions/today/summary'),
-            apiCall('/api/sessions/today')
+            fetchTodaySummary(user.id),
+            fetchTodaySessions(user.id)
           ]);
           setTodayData(sessions, summary);
         } catch (error) {
@@ -44,7 +44,7 @@ export default function Dashboard() {
       };
       fetchData();
     }
-  }, [token, setTodayData]);
+  }, [user, setTodayData]);
 
   // Companion Data Fetching & Real-time Subscription
   useEffect(() => {
@@ -53,8 +53,8 @@ export default function Dashboard() {
     const fetchCompanion = async () => {
       try {
         const [summary, sessions] = await Promise.all([
-          apiCall(`/api/users/${companionId}/summary/today`),
-          apiCall(`/api/users/${companionId}/sessions/today`)
+          fetchTodaySummary(companionId),
+          fetchTodaySessions(companionId)
         ]);
         setCompanionData(summary, sessions);
         setLastUpdated(new Date());
@@ -87,12 +87,13 @@ export default function Dashboard() {
   }, [companionId, setCompanionData]);
 
   const handleDelete = async (id: number) => {
+    if (!user) return;
     try {
-      await apiCall(`/api/sessions/${id}`, 'DELETE');
+      await deleteSession(id, user.id);
       // Refresh data
       const [summary, sessions] = await Promise.all([
-        apiCall('/api/sessions/today/summary'),
-        apiCall('/api/sessions/today')
+        fetchTodaySummary(user.id),
+        fetchTodaySessions(user.id)
       ]);
       setTodayData(sessions, summary);
       setDeleteId(null);

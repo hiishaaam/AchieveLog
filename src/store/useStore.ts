@@ -48,6 +48,7 @@ export interface TodaySummary {
   topicsCovered: string[];
   avgConfidence: number;
   productivityScore: number;
+  streak?: number;
 }
 
 export interface DailyAnalytic {

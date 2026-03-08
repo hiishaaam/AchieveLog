@@ -6,18 +6,18 @@ import AddExamModal from '@/components/exams/AddExamModal';
 import PreparationInsights from '@/components/exams/PreparationInsights';
 import EmptyState from '@/components/ui/EmptyState';
 import { useStore } from '@/store/useStore';
-import { apiCall } from '@/lib/api';
+import { fetchExams as fetchExamsApi, fetchSubjects as fetchSubjectsApi } from '@/lib/supabaseApi';
 
 export default function Exams() {
   const [exams, setExams] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const { token, subjects, setSubjects } = useStore();
+  const { user, subjects, setSubjects } = useStore();
 
   const fetchExams = async () => {
-    if (!token) return;
+    if (!user) return;
     try {
-      const data = await apiCall('/api/exams');
+      const data = await fetchExamsApi(user.id);
       setExams(data);
     } catch (err) {
       console.error(err);
@@ -27,10 +27,10 @@ export default function Exams() {
   };
 
   // Ensure subjects are loaded for the modal
-  const fetchSubjects = async () => {
-    if (!token || subjects.length > 0) return;
+  const loadSubjects = async () => {
+    if (!user || subjects.length > 0) return;
     try {
-      const data = await apiCall('/api/subjects');
+      const data = await fetchSubjectsApi(user.id);
       setSubjects(data);
     } catch (err) {
       console.error(err);
@@ -39,8 +39,8 @@ export default function Exams() {
 
   useEffect(() => {
     fetchExams();
-    fetchSubjects();
-  }, [token]);
+    loadSubjects();
+  }, [user]);
 
   return (
     <div className="space-y-8 pb-20">

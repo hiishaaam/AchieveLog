@@ -284,6 +284,9 @@ app.get('/api/subjects', authenticateToken, async (req: any, res) => {
 app.post('/api/subjects', authenticateToken, async (req: any, res) => {
   const { name, color, icon, total_syllabus_chapters } = req.body;
   
+  console.log("POST /api/subjects called with body:", req.body);
+  console.log("User extracted by authenticateToken:", req.user?.id);
+
   const { data: subject, error } = await supabase
     .from('subjects')
     .insert({
@@ -294,7 +297,10 @@ app.post('/api/subjects', authenticateToken, async (req: any, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ message: error.message });
+  if (error) {
+    console.error("SUPABASE ERROR on subject insert:", error);
+    return res.status(500).json({ message: error.message, details: error.details, code: error.code });
+  }
 
   // Create placeholder chapters
   if (total_syllabus_chapters > 0) {

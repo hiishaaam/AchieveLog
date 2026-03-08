@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 import { useToast } from '@/store/useToast';
+import { deleteExam } from '@/lib/supabaseApi';
 
 interface ExamCardProps {
   exam: any;
@@ -12,7 +13,7 @@ interface ExamCardProps {
 }
 
 export default function ExamCard({ exam, onRefresh }: ExamCardProps) {
-  const { token } = useStore();
+  const { user } = useStore();
   const { addToast } = useToast();
 
   const daysRemaining = differenceInDays(parseISO(exam.exam_date), new Date());
@@ -25,15 +26,11 @@ export default function ExamCard({ exam, onRefresh }: ExamCardProps) {
 
   const handleDelete = async () => {
     if (!confirm('Delete this exam target?')) return;
+    if (!user) return;
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        addToast('Exam deleted', 'success');
-        onRefresh();
-      }
+      await deleteExam(exam.id, user.id);
+      addToast('Exam deleted', 'success');
+      onRefresh();
     } catch (err) {
       console.error(err);
     }

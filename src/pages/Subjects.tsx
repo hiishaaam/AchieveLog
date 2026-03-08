@@ -5,17 +5,17 @@ import SubjectCard from '@/components/SubjectCard';
 import AddSubjectModal from '@/components/AddSubjectModal';
 import SyllabusCompletionWidget from '@/components/SyllabusCompletionWidget';
 import { useStore } from '@/store/useStore';
-import { apiCall } from '@/lib/api';
+import { fetchSubjects } from '@/lib/supabaseApi';
 
 export default function Subjects() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { subjects, setSubjects, token } = useStore();
+  const { subjects, setSubjects, user } = useStore();
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchSubjects = async () => {
-    if (!token) return;
+  const loadSubjects = async () => {
+    if (!user) return;
     try {
-      const data = await apiCall('/api/subjects');
+      const data = await fetchSubjects(user.id);
       setSubjects(data);
     } catch (error) {
       console.error('Failed to fetch subjects', error);
@@ -25,8 +25,8 @@ export default function Subjects() {
   };
 
   useEffect(() => {
-    fetchSubjects();
-  }, [token]);
+    loadSubjects();
+  }, [user]);
 
   return (
     <div className="space-y-8 pb-20">
@@ -51,7 +51,7 @@ export default function Subjects() {
               <SubjectCard 
                 key={subject.id} 
                 subject={subject} 
-                onRefresh={fetchSubjects}
+                onRefresh={loadSubjects}
               />
             ))}
           </div>

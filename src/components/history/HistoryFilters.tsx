@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
+import { fetchSubjects } from '@/lib/supabaseApi';
 
 interface HistoryFiltersProps {
   onFilterChange: (filters: any) => void;
@@ -17,16 +18,15 @@ export default function HistoryFilters({ onFilterChange }: HistoryFiltersProps) 
   const [minConfidence, setMinConfidence] = useState<number | ''>('');
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const { subjects, token, setSubjects } = useStore();
+  const { subjects, user, setSubjects } = useStore();
 
   useEffect(() => {
-    if (subjects.length === 0 && token) {
-      fetch('/api/subjects', { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => res.json())
+    if (subjects.length === 0 && user) {
+      fetchSubjects(user.id)
         .then(data => setSubjects(data))
         .catch(console.error);
     }
-  }, [token]);
+  }, [user]);
 
   // Debounce search
   useEffect(() => {

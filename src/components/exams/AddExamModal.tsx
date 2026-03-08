@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { useStore } from '@/store/useStore';
 import { useToast } from '@/store/useToast';
 import { cn } from '@/lib/utils';
+import { createExam } from '@/lib/supabaseApi';
 
 interface AddExamModalProps {
   isOpen: boolean;
@@ -19,45 +20,27 @@ export default function AddExamModal({ isOpen, onClose, onSuccess }: AddExamModa
   const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { subjects, token } = useStore();
+  const { subjects, user } = useStore();
   const { addToast } = useToast();
-
-  // Fetch subjects if not already loaded (though they usually are)
-  useEffect(() => {
-    if (subjects.length === 0 && token) {
-      // Trigger fetch if needed, but for now assume store has them or parent fetched them
-    }
-  }, [subjects, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !date) return;
+    if (!name.trim() || !date || !user) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/exams', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name,
-          exam_date: date,
-          subjects: selectedSubjects
-        })
+      await createExam(user.id, {
+        name,
+        exam_date: date,
+        subject_ids: selectedSubjects,
       });
 
-      if (response.ok) {
-        addToast('Exam target added successfully', 'success');
-        onSuccess();
-        onClose();
-        setName('');
-        setDate('');
-        setSelectedSubjects([]);
-      } else {
-        addToast('Failed to add exam', 'error');
-      }
+      addToast('Exam target added successfully', 'success');
+      onSuccess();
+      onClose();
+      setName('');
+      setDate('');
+      setSelectedSubjects([]);
     } catch (error) {
       console.error(error);
       addToast('An error occurred', 'error');

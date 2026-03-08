@@ -6,33 +6,32 @@ import SessionsTable from '@/components/history/SessionsTable';
 import EmptyState from '@/components/ui/EmptyState';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useStore } from '@/store/useStore';
-import { apiCall } from '@/lib/api';
+import { fetchHistory } from '@/lib/supabaseApi';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/store/useToast';
 
 export default function History() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState<any>({});
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  const { token } = useStore();
+  const { user } = useStore();
   const { addToast } = useToast();
 
   const fetchSessions = async () => {
-    if (!token) return;
+    if (!user) return;
     setIsLoading(true);
-    
-    const queryParams = new URLSearchParams({
-      page: page.toString(),
-      limit: '20',
-      ...filters
-    });
 
     try {
-      const data = await apiCall(`/api/history?${queryParams}`);
+      const data = await fetchHistory(user.id, {
+        ...filters,
+        page,
+        limit: 20,
+      });
       setSessions(data.sessions);
       setTotal(data.total);
     } catch (err) {
@@ -44,11 +43,18 @@ export default function History() {
 
   useEffect(() => {
     fetchSessions();
-  }, [page, filters, token]);
+  }, [page, filters, user]);
 
   const handleBulkDelete = async () => {
+    if (!user) return;
     try {
-      await apiCall('/api/sessions/bulk-delete', 'POST', { ids: selectedIds });
+      const { error } = await supabase
+        .from('study_sessions')
+        .delete()
+        .in('id', selectedIds)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
       addToast(`Deleted ${selectedIds.length} sessions`, 'success');
       setSelectedIds([]);
       fetchSessions();
@@ -59,7 +65,6 @@ export default function History() {
   };
 
   const handleExport = () => {
-    // Simple CSV export logic
     const headers = ['Date', 'Subject', 'Chapter', 'Topics', 'Duration (min)', 'Confidence', 'Mood', 'Notes'];
     const csvContent = [
       headers.join(','),
@@ -67,7 +72,7 @@ export default function History() {
         s.date,
         `"${s.subject_name}"`,
         `"${s.chapter}"`,
-        `"${s.topics.join('; ')}"`,
+        `"${(s.topics || []).join('; ')}"`,
         s.duration_minutes,
         s.confidence_rating,
         s.mood,

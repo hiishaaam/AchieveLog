@@ -5,6 +5,7 @@ import { useStore } from '@/store/useStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { fetchChapters as fetchChaptersApi, createChapter, updateChapter as updateChapterApi, deleteChapter as deleteChapterApi } from '@/lib/supabaseApi';
 
 interface Chapter {
   id: number;
@@ -23,21 +24,24 @@ export default function ChapterList({ subjectId, subjectColor, onUpdateStats }: 
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [newChapterName, setNewChapterName] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const { token } = useStore();
+  const { user } = useStore();
 
   useEffect(() => {
-    fetchChapters();
+    loadChapters();
   }, [subjectId]);
 
-  const fetchChapters = async () => {
+  const statusDbToUi: Record<string, string> = {
+    'not_started': 'Not Started',
+    'in_progress': 'In Progress',
+    'completed': 'Completed',
+  };
+
+  const loadChapters = async () => {
+    if (!user) return;
     try {
-      const res = await fetch(`/api/subjects/${subjectId}/chapters`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChapters(data);
-      }
+      const data = await fetchChaptersApi(subjectId, user.id);
+      // Map DB status to UI status
+      setChapters(data.map((c: any) => ({ ...c, status: statusDbToUi[c.status] || c.status })));
     } catch (err) {
       console.error(err);
     }
@@ -45,31 +49,21 @@ export default function ChapterList({ subjectId, subjectColor, onUpdateStats }: 
 
   const addChapter = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newChapterName.trim()) return;
+    if (!newChapterName.trim() || !user) return;
 
     try {
-      const res = await fetch(`/api/subjects/${subjectId}/chapters`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: newChapterName })
-      });
-
-      if (res.ok) {
-        const newChapter = await res.json();
-        setChapters([...chapters, newChapter]);
-        setNewChapterName('');
-        setIsAdding(false);
-        onUpdateStats();
-      }
+      const newChapter = await createChapter(subjectId, user.id, newChapterName);
+      setChapters([...chapters, { ...newChapter, status: statusDbToUi[newChapter.status] || newChapter.status }]);
+      setNewChapterName('');
+      setIsAdding(false);
+      onUpdateStats();
     } catch (err) {
       console.error(err);
     }
   };
 
   const updateStatus = async (chapter: Chapter) => {
+    if (!user) return;
     const statusOrder = ['Not Started', 'In Progress', 'Completed'] as const;
     const currentIndex = statusOrder.indexOf(chapter.status);
     const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
@@ -81,45 +75,29 @@ export default function ChapterList({ subjectId, subjectColor, onUpdateStats }: 
     setChapters(updatedChapters);
 
     try {
-      await fetch(`/api/chapters/${chapter.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: nextStatus })
-      });
+      await updateChapterApi(chapter.id, user.id, { status: nextStatus });
       onUpdateStats();
     } catch (err) {
       console.error(err);
-      // Revert on error
-      fetchChapters();
+      loadChapters();
     }
   };
 
   const updateName = async (id: number, name: string) => {
+    if (!user) return;
     try {
-      await fetch(`/api/chapters/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name })
-      });
+      await updateChapterApi(id, user.id, { name });
     } catch (err) {
       console.error(err);
     }
   };
 
-  const deleteChapter = async (id: number) => {
+  const handleDeleteChapter = async (id: number) => {
     if (!confirm('Delete this chapter?')) return;
+    if (!user) return;
     
     try {
-      await fetch(`/api/chapters/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await deleteChapterApi(id, user.id);
       setChapters(chapters.filter(c => c.id !== id));
       onUpdateStats();
     } catch (err) {
@@ -199,7 +177,7 @@ export default function ChapterList({ subjectId, subjectColor, onUpdateStats }: 
                 </button>
 
                 <button
-                  onClick={() => deleteChapter(chapter.id)}
+                  onClick={() => handleDeleteChapter(chapter.id)}
                   className="p-1.5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Trash2 size={14} />
