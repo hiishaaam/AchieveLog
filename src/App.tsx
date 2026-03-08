@@ -8,6 +8,7 @@ import Analytics from './pages/Analytics';
 import Exams from './pages/Exams';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Compare from './pages/Compare';
 import { useStore } from './store/useStore';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ function App() {
                   <Route path="/log" element={<LogSession />} />
                   <Route path="/subjects" element={<Subjects />} />
                   <Route path="/history" element={<History />} />
+                  <Route path="/compare" element={<Compare />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/exams" element={<Exams />} />
                   <Route path="/settings" element={<Settings />} />

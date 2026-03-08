@@ -1,20 +1,19 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, BookOpen, History, BarChart2, Calendar, Settings, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, History, BarChart2, Calendar, Settings, Menu, X, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import ToastContainer from './ui/ToastContainer';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/log', label: 'Log', icon: PlusCircle },
   { path: '/subjects', label: 'Subjects', icon: BookOpen },
-  { path: '/history', label: 'History', icon: History },
+  { path: '/compare', label: 'Compare', icon: Users },
   { path: '/analytics', label: 'Analytics', icon: BarChart2 },
   { path: '/exams', label: 'Exams', icon: Calendar },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
-
-import ToastContainer from './ui/ToastContainer';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -118,7 +117,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Bottom Nav (Optional, but good for quick actions) */}
       <nav className="md:hidden fixed bottom-4 left-4 right-4 glass-card rounded-2xl p-2 flex justify-around items-center z-30 border border-white/10 shadow-2xl">
-        {navItems.slice(0, 5).map((item) => {
+        {navItems.slice(0, 6).map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (

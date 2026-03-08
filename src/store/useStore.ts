@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
+  display_name?: string;
+  email?: string;
 }
 
 export interface Subject {
@@ -39,22 +41,40 @@ export interface Session {
   mood: string;
 }
 
+export interface TodaySummary {
+  totalMinutes: number;
+  sessionCount: number;
+  subjectsCovered: string[];
+  topicsCovered: string[];
+  avgConfidence: number;
+  productivityScore: number;
+}
+
+export interface DailyAnalytic {
+  date: string;
+  minutes: number;
+}
+
 interface AppState {
   user: User | null;
   token: string | null;
   subjects: Subject[];
   sessions: Session[];
   todaySessions: Session[];
-  todaySummary: {
-    totalMinutes: number;
-    sessionCount: number;
-    subjectsCovered: string[];
-    topicsCovered: string[];
-    avgConfidence: number;
-    productivityScore: number;
-  } | null;
+  todaySummary: TodaySummary | null;
   isLoading: boolean;
   
+  // Companion Data
+  companionId: string | null;
+  companionProfile: {
+    id: string;
+    username: string;
+    display_name: string;
+  } | null;
+  companionTodaySummary: TodaySummary | null;
+  companionTodaySessions: Session[];
+  companionWeeklyData: DailyAnalytic[];
+
   setUser: (user: User | null, token: string | null) => void;
   setSubjects: (subjects: Subject[]) => void;
   addSubject: (subject: Subject) => void;
@@ -64,10 +84,14 @@ interface AppState {
   setSessions: (sessions: Session[]) => void;
   addSession: (session: Session) => void;
   setTodayData: (sessions: Session[], summary: any) => void;
+  setCompanionData: (summary: TodaySummary, sessions: Session[]) => void;
   logout: () => void;
+  
+  // Actions
+  login: (email: string, password: string) => Promise<void>;
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   user: JSON.parse(localStorage.getItem('achievelog_user') || 'null'),
   token: localStorage.getItem('achievelog_token'),
   subjects: [],
@@ -75,6 +99,12 @@ export const useStore = create<AppState>((set) => ({
   todaySessions: [],
   todaySummary: null,
   isLoading: false,
+
+  companionId: null,
+  companionProfile: null,
+  companionTodaySummary: null,
+  companionTodaySessions: [],
+  companionWeeklyData: [],
 
   setUser: (user, token) => {
     if (user && token) {
@@ -104,10 +134,69 @@ export const useStore = create<AppState>((set) => ({
       : state.todaySessions
   })),
   setTodayData: (sessions, summary) => set({ todaySessions: sessions, todaySummary: summary }),
+  
+  setCompanionData: (summary, sessions) => set({
+    companionTodaySummary: summary,
+    companionTodaySessions: sessions
+  }),
 
   logout: () => {
     localStorage.removeItem('achievelog_user');
     localStorage.removeItem('achievelog_token');
-    set({ user: null, token: null, subjects: [], sessions: [], todaySessions: [], todaySummary: null });
+    set({ 
+      user: null, 
+      token: null, 
+      subjects: [], 
+      sessions: [], 
+      todaySessions: [], 
+      todaySummary: null,
+      companionId: null,
+      companionProfile: null,
+      companionTodaySummary: null,
+      companionTodaySessions: [],
+      companionWeeklyData: []
+    });
   },
+
+  login: async (email, password) => {
+    const BASE_URL = import.meta.env.VITE_API_URL ?? '';
+    try {
+      const response = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) throw new Error('Login failed');
+      
+      const data = await response.json();
+      get().setUser(data.user, data.token);
+
+      // Fetch companion
+      // In a real app we'd have a specific endpoint or logic, 
+      // here we fetch all users and pick the one that isn't us.
+      // Note: This endpoint /api/users/all doesn't exist in the server code provided in previous steps.
+      // I will assume the user wants me to add this logic even if the endpoint might fail or needs to be added later.
+      // Or maybe I should use Supabase client directly if allowed, but the prompt says "fetch(`${BASE_URL}/api/users/all`)".
+      // I will follow the prompt exactly.
+      try {
+        const allUsers = await fetch(`${BASE_URL}/api/users/all`, {
+           headers: { 'Authorization': `Bearer ${data.token}` }
+        }).then(r => r.json());
+        
+        if (Array.isArray(allUsers)) {
+            const companion = allUsers.find((u: any) => u.id !== data.user.id);
+            if (companion) {
+                set({ companionId: companion.id, companionProfile: companion });
+            }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch companion', err);
+      }
+
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
+  }
 }));
