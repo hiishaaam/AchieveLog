@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useStore, Session, TodaySummary } from '../store/useStore';
 import { fetchTodaySessions, fetchTodaySummary, deleteSession } from '../lib/supabaseApi';
 import { supabase } from '../lib/supabase';
+import { apiCall } from '../lib/api';
 import { Clock, BookOpen, Target, Zap, Edit2, Trash2, Calendar, Star, Smile, Frown, Meh, Plus, Eye, RefreshCw, Trophy, Zap as ZapIcon, Handshake, Book } from 'lucide-react';
 
 export default function Dashboard() {
@@ -18,7 +19,8 @@ export default function Dashboard() {
     companionProfile,
     companionTodaySummary,
     companionTodaySessions,
-    setCompanionData
+    setCompanionData,
+    setCompanionProfile
   } = useStore();
   
   const [isLoading, setIsLoading] = useState(true);
@@ -45,6 +47,34 @@ export default function Dashboard() {
       fetchData();
     }
   }, [user, setTodayData]);
+
+  // Auto-resolve companion based on email
+  useEffect(() => {
+    if (user && user.email && !companionId) {
+      const myEmail = user.email.toLowerCase();
+      let targetEmail = '';
+      
+      if (myEmail === 'hishamaju189@gmail.com') {
+        targetEmail = 'liyananaduvil@gmail.com';
+      } else if (myEmail === 'liyananaduvil@gmail.com') {
+        targetEmail = 'hishamaju189@gmail.com';
+      }
+
+      if (targetEmail) {
+        apiCall(`/api/companion/resolve?email=${encodeURIComponent(targetEmail)}`)
+          .then(data => {
+            if (data && data.id) {
+              setCompanionProfile(data.id, { 
+                id: data.id, 
+                username: targetEmail.split('@')[0], 
+                display_name: targetEmail.split('@')[0] 
+              });
+            }
+          })
+          .catch(err => console.error('Failed to resolve companion:', err));
+      }
+    }
+  }, [user, companionId, setCompanionProfile]);
 
   // Companion Data Fetching & Real-time Subscription
   useEffect(() => {

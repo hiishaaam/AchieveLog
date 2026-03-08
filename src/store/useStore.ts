@@ -175,27 +175,7 @@ export const useStore = create<AppState>((set, get) => ({
       const data = await response.json();
       get().setUser(data.user, data.token);
 
-      // Fetch companion
-      // In a real app we'd have a specific endpoint or logic, 
-      // here we fetch all users and pick the one that isn't us.
-      // Note: This endpoint /api/users/all doesn't exist in the server code provided in previous steps.
-      // I will assume the user wants me to add this logic even if the endpoint might fail or needs to be added later.
-      // Or maybe I should use Supabase client directly if allowed, but the prompt says "fetch(`${BASE_URL}/api/users/all`)".
-      // I will follow the prompt exactly.
-      try {
-        const allUsers = await fetch(`${BASE_URL}/api/users/all`, {
-           headers: { 'Authorization': `Bearer ${data.token}` }
-        }).then(r => r.json());
-        
-        if (Array.isArray(allUsers)) {
-            const companion = allUsers.find((u: any) => u.id !== data.user.id);
-            if (companion) {
-                set({ companionId: companion.id, companionProfile: companion });
-            }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch companion', err);
-      }
+      // Companion fetching is correctly handled in Dashboard.tsx via the /api/companion/resolve endpoint.
 
     } catch (error) {
       console.error(error);

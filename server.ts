@@ -28,9 +28,9 @@ app.get('/api/health', async (req, res) => {
   const { data, error } = await supabase
     .from('profiles')
     .select('count');
-  
+
   if (error && error.code !== 'PGRST116') {
-     return res.status(500).json({ status: 'error', message: error.message });
+    return res.status(500).json({ status: 'error', message: error.message });
   }
   res.json({ status: 'ok' });
 });
@@ -48,9 +48,14 @@ const authenticateToken = async (req: any, res: any, next: any) => {
   }
 
   const { data: { user }, error } = await supabase.auth.getUser(token);
-  
+
   if (error || !user) {
     return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+
+  const allowedEmails = ['liyananaduvil@gmail.com', 'hishamaju189@gmail.com'];
+  if (user.email && !allowedEmails.includes(user.email.toLowerCase())) {
+    return res.status(403).json({ message: 'Unauthorized user. You do not have permission.' });
   }
 
   req.user = user;
@@ -58,6 +63,34 @@ const authenticateToken = async (req: any, res: any, next: any) => {
 };
 
 // Helper function for streak calculation
+// (End of previous section, maintaining same file continuity)
+
+app.get('/api/companion/resolve', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email parameter is required' });
+    }
+
+    // We must query auth.users securely using the service role client
+    const { data: { users }, error } = await supabase.auth.admin.listUsers();
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      return res.status(500).json({ error: 'Failed to find users' });
+    }
+
+    const companion = users.find((u: any) => u.email === email);
+    if (companion) {
+      return res.json({ id: companion.id, email: companion.email });
+    } else {
+      return res.status(404).json({ error: 'Companion not found' });
+    }
+  } catch (err: any) {
+    console.error('Resolve companion error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 async function getUserStreak(userId: string): Promise<number> {
   const { data: sessions } = await supabase
     .from('study_sessions')
@@ -69,41 +102,41 @@ async function getUserStreak(userId: string): Promise<number> {
 
   // Use a Set to get unique dates
   const uniqueDates = [...new Set(sessions.map((s: any) => s.date))];
-  
+
   // Sort dates descending just to be safe (though query ordered them)
   uniqueDates.sort((a: any, b: any) => new Date(b).getTime() - new Date(a).getTime());
 
   let streak = 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
   // Check if the most recent session was today or yesterday to start the streak
   const lastSessionDate = new Date(uniqueDates[0]);
   lastSessionDate.setHours(0, 0, 0, 0);
-  
+
   if (lastSessionDate.getTime() !== today.getTime() && lastSessionDate.getTime() !== yesterday.getTime()) {
-      return 0;
+    return 0;
   }
 
   // Iterate backwards to count consecutive days
   let currentDate = lastSessionDate;
 
   for (const dateStr of uniqueDates) {
-      const sessionDate = new Date(dateStr);
-      sessionDate.setHours(0, 0, 0, 0);
+    const sessionDate = new Date(dateStr);
+    sessionDate.setHours(0, 0, 0, 0);
 
-      if (sessionDate.getTime() === currentDate.getTime()) {
-          streak++;
-          currentDate.setDate(currentDate.getDate() - 1);
-      } else {
-          // Gap found
-          break;
-      }
+    if (sessionDate.getTime() === currentDate.getTime()) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      // Gap found
+      break;
+    }
   }
-  
+
   return streak;
 }
 
@@ -115,18 +148,18 @@ const getCredentials = (username: string, pin: string) => ({
 
 // Mock User Helper
 const createMockUser = async (username: string) => {
-  const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
-  
+
   await supabase.from('profiles').insert({
     id,
     username,
     display_name: username,
     daily_goal_minutes: 240
   });
-  
+
   return {
     id,
     email: `${username}@mock.local`,
@@ -144,41 +177,41 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Try Supabase Auth first
     if (!process.env.SUPABASE_URL?.includes('placeholder')) {
-        const { email, password } = getCredentials(username, pin);
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { username, display_name: username } }
-        });
+      const { email, password } = getCredentials(username, pin);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { username, display_name: username } }
+      });
 
-        if (!error && data.user) {
-             await supabase.from('profiles').insert({
-                id: data.user.id,
-                username,
-                display_name: username,
-                daily_goal_minutes: 240
-             });
-             return res.json({
-                token: data.session?.access_token,
-                user: {
-                    id: data.user.id,
-                    email: data.user.email,
-                    username,
-                    display_name: username,
-                    daily_goal_minutes: 240
-                }
-             });
-        }
-        
-        if (error && !error.message.includes('rate limit') && !error.message.includes('security purposes')) {
-             console.warn('Supabase Auth failed:', error.message);
-        }
+      if (!error && data.user) {
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          username,
+          display_name: username,
+          daily_goal_minutes: 240
+        });
+        return res.json({
+          token: data.session?.access_token,
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            username,
+            display_name: username,
+            daily_goal_minutes: 240
+          }
+        });
+      }
+
+      if (error && !error.message.includes('rate limit') && !error.message.includes('security purposes')) {
+        console.warn('Supabase Auth failed:', error.message);
+      }
     }
 
     // Fallback: Mock Auth
     console.log('Falling back to Mock Auth for registration');
     const mockUser = await createMockUser(username);
-    
+
     res.json({
       token: `mock-token-${mockUser.id}`,
       user: mockUser
@@ -199,57 +232,57 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Try Supabase Auth first
     if (!process.env.SUPABASE_URL?.includes('placeholder')) {
-        const { email, password } = getCredentials(username, pin);
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        
-        if (!error && data.user && data.session) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', data.user.id)
-                .single();
-            
-            return res.json({
-                token: data.session.access_token,
-                user: {
-                    id: data.user.id,
-                    email: data.user.email,
-                    username: profile?.username || username,
-                    display_name: profile?.display_name || username,
-                    daily_goal_minutes: profile?.daily_goal_minutes || 240
-                }
-            });
-        }
+      const { email, password } = getCredentials(username, pin);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (!error && data.user && data.session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        return res.json({
+          token: data.session.access_token,
+          user: {
+            id: data.user.id,
+            email: data.user.email,
+            username: profile?.username || username,
+            display_name: profile?.display_name || username,
+            daily_goal_minutes: profile?.daily_goal_minutes || 240
+          }
+        });
+      }
     }
 
     // Fallback: Mock Login
     console.log('Falling back to Mock Login');
-    
+
     const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('username', username)
-        .limit(1);
-        
+      .from('profiles')
+      .select('*')
+      .eq('username', username)
+      .limit(1);
+
     const profile = profiles?.[0];
 
     if (profile) {
-        return res.json({
-            token: `mock-token-${profile.id}`,
-            user: {
-                id: profile.id,
-                email: `${username}@mock.local`,
-                username: profile.username,
-                display_name: profile.display_name,
-                daily_goal_minutes: profile.daily_goal_minutes
-            }
-        });
+      return res.json({
+        token: `mock-token-${profile.id}`,
+        user: {
+          id: profile.id,
+          email: `${username}@mock.local`,
+          username: profile.username,
+          display_name: profile.display_name,
+          daily_goal_minutes: profile.daily_goal_minutes
+        }
+      });
     } else {
-        const mockUser = await createMockUser(username);
-        return res.json({
-            token: `mock-token-${mockUser.id}`,
-            user: mockUser
-        });
+      const mockUser = await createMockUser(username);
+      return res.json({
+        token: `mock-token-${mockUser.id}`,
+        user: mockUser
+      });
     }
 
   } catch (err: any) {
@@ -269,7 +302,7 @@ app.get('/api/subjects', authenticateToken, async (req: any, res) => {
 
   const result = subjects.map((sub: any) => {
     const totalMinutes = sub.study_sessions?.reduce((acc: number, s: any) => acc + s.duration_minutes, 0) || 0;
-    
+
     return {
       ...sub,
       total_study_minutes: totalMinutes,
@@ -283,7 +316,7 @@ app.get('/api/subjects', authenticateToken, async (req: any, res) => {
 
 app.post('/api/subjects', authenticateToken, async (req: any, res) => {
   const { name, color, icon, total_syllabus_chapters } = req.body;
-  
+
   console.log("POST /api/subjects called with body:", req.body);
   console.log("User extracted by authenticateToken:", req.user?.id);
 
@@ -310,7 +343,7 @@ app.post('/api/subjects', authenticateToken, async (req: any, res) => {
       name: `Chapter ${i + 1}`,
       status: 'not_started'
     }));
-    
+
     await supabase.from('chapters').insert(chapters);
   }
 
@@ -373,7 +406,7 @@ app.put('/api/chapters/:id', authenticateToken, async (req: any, res) => {
     .single();
 
   if (error) return res.status(500).json({ message: error.message });
-  
+
   res.json(data);
 });
 
@@ -398,14 +431,14 @@ app.get('/api/sessions', authenticateToken, async (req: any, res) => {
     .order('start_time', { ascending: false });
 
   if (error) return res.status(500).json({ message: error.message });
-  
+
   const result = data.map((s: any) => ({
     ...s,
     subject_name: s.subjects?.name,
     subject_color: s.subjects?.color,
     chapter: s.chapters?.name
   }));
-  
+
   res.json(result);
 });
 
@@ -481,7 +514,7 @@ app.get('/api/sessions/today/summary', authenticateToken, async (req: any, res) 
 
 app.post('/api/sessions', authenticateToken, async (req: any, res) => {
   const { date, subject_id, chapter_id, chapter, topics,
-          start_time, end_time, confidence_rating, mood, notes } = req.body;
+    start_time, end_time, confidence_rating, mood, notes } = req.body;
 
   const [sh, sm] = start_time.split(':').map(Number);
   const [eh, em] = end_time.split(':').map(Number);
@@ -555,12 +588,12 @@ app.get('/api/exams', authenticateToken, async (req: any, res) => {
     .order('exam_date', { ascending: true });
 
   if (error) return res.status(500).json({ message: error.message });
-  
+
   const result = data.map((e: any) => ({
-      ...e,
-      subjects: e.subject_ids,
-      progress: 0,
-      linked_subjects: []
+    ...e,
+    subjects: e.subject_ids,
+    progress: 0,
+    linked_subjects: []
   }));
 
   res.json(result);
@@ -572,7 +605,7 @@ app.post('/api/exams', authenticateToken, async (req: any, res) => {
     .from('exam_targets')
     .insert({
       user_id: req.user.id,
-      name, exam_date, 
+      name, exam_date,
       subject_ids: subjects
     })
     .select()
@@ -607,12 +640,12 @@ app.get('/api/history', authenticateToken, async (req: any, res) => {
   if (startDate) query = query.gte('date', startDate);
   if (endDate) query = query.lte('date', endDate);
   if (subjects) {
-      const list = String(subjects).split(',');
-      query = query.in('subject_id', list);
+    const list = String(subjects).split(',');
+    query = query.in('subject_id', list);
   }
   if (mood) query = query.eq('mood', mood);
   if (minConfidence) query = query.gte('confidence_rating', minConfidence);
-  
+
   query = query.order('date', { ascending: false }).order('start_time', { ascending: false }).range(from, to);
 
   const { data, count, error } = await query;
@@ -626,11 +659,11 @@ app.get('/api/history', authenticateToken, async (req: any, res) => {
     chapter: s.chapters?.name
   }));
 
-  res.json({ 
-      sessions: result, 
-      total: count || 0, 
-      page: Number(page), 
-      totalPages: Math.ceil((count || 0) / Number(limit)) 
+  res.json({
+    sessions: result,
+    total: count || 0,
+    page: Number(page),
+    totalPages: Math.ceil((count || 0) / Number(limit))
   });
 });
 
@@ -657,24 +690,24 @@ app.get('/api/settings', authenticateToken, async (req: any, res) => {
     .single();
 
   if (error) return res.status(500).json({ message: error.message });
-  
+
   res.json({
-      user_id: data.id,
-      display_name: data.display_name,
-      daily_goal: (data.daily_goal_minutes || 240) / 60,
-      theme: data.theme,
+    user_id: data.id,
+    display_name: data.display_name,
+    daily_goal: (data.daily_goal_minutes || 240) / 60,
+    theme: data.theme,
   });
 });
 
 app.put('/api/settings', authenticateToken, async (req: any, res) => {
   const { display_name, daily_goal, theme } = req.body;
-  
+
   const { error } = await supabase
     .from('profiles')
     .update({
-        display_name,
-        daily_goal_minutes: daily_goal * 60,
-        theme
+      display_name,
+      daily_goal_minutes: daily_goal * 60,
+      theme
     })
     .eq('id', req.user.id);
 
@@ -687,9 +720,9 @@ app.post('/api/data/clear', authenticateToken, async (req: any, res) => {
   const { error: cErr } = await supabase.from('chapters').delete().eq('user_id', req.user.id);
   const { error: subErr } = await supabase.from('subjects').delete().eq('user_id', req.user.id);
   const { error: eErr } = await supabase.from('exam_targets').delete().eq('user_id', req.user.id);
-  
+
   if (sErr || cErr || subErr || eErr) return res.status(500).json({ message: 'Failed to clear some data' });
-  
+
   res.json({ success: true });
 });
 
@@ -815,19 +848,19 @@ app.get('/api/analytics/all-time', authenticateToken, async (req: any, res) => {
 
 // GET /api/analytics/summary
 app.get('/api/analytics/summary', authenticateToken, async (req: any, res) => {
-    const { data, error } = await supabase
-        .from('study_sessions')
-        .select('duration_minutes')
-        .eq('user_id', req.user.id);
-        
-    if (error) return res.status(500).json({ message: error.message });
-    
-    const totalMinutes = data.reduce((acc: any, s: any) => acc + s.duration_minutes, 0);
-    
-    res.json({
-        totalMinutes,
-        totalSessions: data.length
-    });
+  const { data, error } = await supabase
+    .from('study_sessions')
+    .select('duration_minutes')
+    .eq('user_id', req.user.id);
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const totalMinutes = data.reduce((acc: any, s: any) => acc + s.duration_minutes, 0);
+
+  res.json({
+    totalMinutes,
+    totalSessions: data.length
+  });
 });
 
 // =====================
@@ -970,7 +1003,7 @@ app.get('/api/users/:id/history', authenticateToken, async (req: any, res) => {
 
   if (startDate) query = query.gte('date', startDate);
   if (endDate) query = query.lte('date', endDate);
-  
+
   query = query.order('date', { ascending: false }).limit(Number(limit));
 
   const { data, error } = await query;
