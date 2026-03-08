@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { apiCall } from '../lib/api';
-import { Lock, User, Loader2, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [username, setUsername] = useState('');
-  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -20,43 +20,43 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const endpoint = isRegistering ? '/api/auth/register' : '/api/auth/login';
-      // We use fetch directly here because apiCall handles 401 by redirecting to login, 
-      // which might cause a loop or weird behavior if we are already on login.
-      // But actually apiCall is fine, except we don't have a token yet.
-      
-      const BASE_URL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL ?? '');
-      
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, pin })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Authentication failed');
-      }
-
-      setUser(data.user, data.token);
-
-      // Fetch companion
-      try {
-        const allUsersResponse = await fetch(`${BASE_URL}/api/users/all`, {
-          headers: { 'Authorization': `Bearer ${data.token}` }
+      if (isRegistering) {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
         });
-        if (allUsersResponse.ok) {
-          const allUsers = await allUsersResponse.json();
-          if (Array.isArray(allUsers)) {
-            const companion = allUsers.find((u: any) => u.id !== data.user.id);
-            if (companion) {
-              useStore.getState().setCompanionProfile(companion.id, companion);
-            }
+        
+        if (signUpError) throw signUpError;
+        
+        if (data.user) {
+          // Attempt to create a base profile. Often done via Supabase triggers but we handle it here.
+          const username = email.split('@')[0];
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            username,
+            display_name: username
+          }).select().single(); // Try insert, ignore if exists
+          
+          if (data.session) {
+            setUser({ ...data.user, username, display_name: username }, data.session.access_token);
+          } else {
+             setError("Success! Please check your email to confirm your account.");
+             setIsLoading(false);
+             return;
           }
         }
-      } catch (err) {
-        console.warn('Failed to fetch companion', err);
+      } else {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) throw signInError;
+        
+        if (data.user && data.session) {
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+          setUser({ ...data.user, ...profile }, data.session.access_token);
+        }
       }
 
       navigate('/');
@@ -92,34 +92,32 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Username</label>
+              <label className="text-sm font-medium text-slate-300">Email</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-slate-800/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                  placeholder="Enter username"
+                  placeholder="Enter your email address"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">PIN Code</label>
+              <label className="text-sm font-medium text-slate-300">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="password"
                   required
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-slate-800/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                  placeholder="Enter 4-6 digit PIN"
+                  placeholder="Enter 6+ characters"
                 />
               </div>
             </div>
