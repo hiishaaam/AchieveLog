@@ -518,9 +518,10 @@ app.post('/api/sessions', authenticateToken, async (req: any, res) => {
 
   const [sh, sm] = start_time.split(':').map(Number);
   const [eh, em] = end_time.split(':').map(Number);
-  const duration_minutes = (eh * 60 + em) - (sh * 60 + sm);
-  if (duration_minutes <= 0)
-    return res.status(400).json({ message: 'End time must be after start time' });
+  let duration_minutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (duration_minutes < 0) duration_minutes += 24 * 60;
+  if (duration_minutes === 0)
+    return res.status(400).json({ message: 'Duration must be greater than zero' });
 
   // Accept chapter_id as number, or chapter as string name
   let finalChapterId = chapter_id;
@@ -549,9 +550,10 @@ app.put('/api/sessions/:id', authenticateToken, async (req: any, res) => {
   const { start_time, end_time, chapter_id, chapter, ...rest } = req.body;
   const [sh, sm] = start_time.split(':').map(Number);
   const [eh, em] = end_time.split(':').map(Number);
-  const duration_minutes = (eh * 60 + em) - (sh * 60 + sm);
-  if (duration_minutes <= 0)
-    return res.status(400).json({ message: 'End time must be after start time' });
+  let duration_minutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (duration_minutes < 0) duration_minutes += 24 * 60;
+  if (duration_minutes === 0)
+    return res.status(400).json({ message: 'Duration must be greater than zero' });
 
   let finalChapterId = chapter_id;
   if (finalChapterId && isNaN(Number(finalChapterId))) finalChapterId = null;

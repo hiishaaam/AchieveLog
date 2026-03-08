@@ -127,7 +127,8 @@ export default function LogSession() {
     if (!formData.startTime || !formData.endTime) return null;
     const start = new Date(`1970-01-01T${formData.startTime}:00`);
     const end = new Date(`1970-01-01T${formData.endTime}:00`);
-    const diff = (end.getTime() - start.getTime()) / 60000; // minutes
+    let diff = (end.getTime() - start.getTime()) / 60000; // minutes
+    if (diff < 0) diff += 24 * 60; // handle overnight sessions
     return diff > 0 ? diff : null;
   };
 
